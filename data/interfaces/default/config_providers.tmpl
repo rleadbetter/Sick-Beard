@@ -18,6 +18,7 @@ sbRoot = '$sbRoot';
 #end for
 });
 </script>
+<script type="text/javascript" src="/js/providerTooltip.js"></script>
 
 <div id="config">
 <div id="config-content">
@@ -55,6 +56,9 @@ sbRoot = '$sbRoot';
                             $curProvider.name
                             #if not $curProvider.supportsBacklog then "*" else ""#
                             #if $curProvider.name == "EZRSS" then "**" else ""#
+                            <p id="info_hover_$curName" style="display:none;">$curProvider.description</p>
+                            <img src="/images/info32.png" height="16" class="provInfo" id="hover_$curName"/>
+                         
                           </li>
                         #end for
                         </ul>

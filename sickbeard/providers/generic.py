@@ -47,6 +47,7 @@ class GenericProvider:
         self.providerType = None
         self.name = name
         self.url = ''
+        self.description = u"No description"
 
         self.supportsBacklog = False
 
@@ -78,6 +79,9 @@ class GenericProvider:
         This should be overridden and should return the config setting eg. sickbeard.MYPROVIDER
         """
         return False
+ 
+    def getDiscription(self):
+        return self.description
 
     def getResult(self, episodes):
         """
@@ -192,7 +196,7 @@ class GenericProvider:
         itemList = []
 
         for cur_search_string in self._get_episode_search_strings(episode):
-            itemList += self._doSearch(cur_search_string)
+           itemList += self._doSearch(cur_search_string)
 
         for item in itemList:
 
