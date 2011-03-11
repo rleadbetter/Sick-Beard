@@ -1,6 +1,6 @@
 $(function(){
         $('body').append('<div id="tooltip" />');
-        $('.provInfo').tooltip(
+        $('img.float-right').tooltip(
         {
                 position:     'bottom right',
                 offset:       [0, 5],
