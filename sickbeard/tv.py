@@ -45,6 +45,7 @@ from sickbeard import encodingKludge as ek
 from sickbeard.helpers import parse_result_wrapper
 from common import Quality, Overview
 from common import DOWNLOADED, SNATCHED, SNATCHED_PROPER, ARCHIVED, IGNORED, UNAIRED, WANTED, SKIPPED, UNKNOWN
+from sickbeard.infoProviders import InfoInterface
 
 class TVShow(object):
 
@@ -587,7 +588,8 @@ class TVShow(object):
     def loadFromTVDB(self, cache=True, tvapi=None, cachedSeason=None):
 
         logger.log(str(self.tvdbid) + ": Loading show info from theTVDB")
-
+        ## obsolete !!!
+        
         # There's gotta be a better way of doing this but we don't wanna
         # change the cache value elsewhere
         if tvapi is None:
@@ -604,8 +606,11 @@ class TVShow(object):
         else:
             t = tvapi
 
-        myEp = t[self.tvdbid]
-
+        infoP = InfoInterface("tvdb")
+        myEp = infoP[self.tvdbid]
+        
+        logger.log("the name: "+str(myEp["seriesname"]))
+        
         self.name = myEp["seriesname"]
 
         self.genre = myEp['genre']
