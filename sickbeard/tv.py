@@ -588,7 +588,7 @@ class TVShow(object):
     def loadFromTVDB(self, cache=True, tvapi=None, cachedSeason=None):
 
         logger.log(str(self.tvdbid) + ": Loading show info from theTVDB")
-        ## obsolete !!!
+        """ obsolete !!!
         
         # There's gotta be a better way of doing this but we don't wanna
         # change the cache value elsewhere
@@ -605,11 +605,25 @@ class TVShow(object):
 
         else:
             t = tvapi
+        """
+        settings={}
+        if not cache:
+            settings['cache'] = 'recache'
+        if self.lang:
+            settings['language'] = self.lang
 
-        infoP = InfoInterface("tvdb")
+        infoP = InfoInterface("tvdb",settings)
         myEp = infoP[self.tvdbid]
         
         logger.log("the name: "+str(myEp["seriesname"]))
+        
+        infoPAni = InfoInterface("anidb")
+        myEpAni = infoPAni[self.tvdbid]
+        
+        
+        logger.log("the name: "+str(myEpAni["seriesname"]))
+        
+        
         
         self.name = myEp["seriesname"]
 

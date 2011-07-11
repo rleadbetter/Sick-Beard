@@ -18,27 +18,31 @@
 
 
 import sickbeard
-from lib.tvdb_api import tvdb_api, tvdb_exceptions
+from sickbeard import helpers, logger
 
 class InfoInterface(dict):
 
     id = None
     name = None
     
-    def  __init__(self,interfaceType="tvdb"):
+    def  __init__(self,interfaceType="tvdb",settings={}):
         
         self.inteface = None
         if interfaceType == "tvdb":
-            self.inteface = TvDBInterface()
+            self.inteface = TvDBInterface(settings)
         elif interfaceType == "tvrage":
-            self.inteface = TvDBInterface()
+            self.inteface = TvRageInterface(settings)
         elif interfaceType == "anidb":
-            self.inteface = TvDBInterface()
+            self.inteface = AnidbInterface(settings)
         
         if not self.inteface:
             raise UnkownInterfaceType()
+        self.interfaceType = interfaceType
+        logger.log(u"New interface created with type "+self.interfaceType)
 
     def __getitem__(self,key):
+        
+        logger.log(u""+self.interfaceType+" interface got request for: "+str(key))
         return self.inteface[key]
 
 
@@ -46,42 +50,102 @@ class GenericInfoInterface(object):
     """
        generic info interface 
     """
+    shows = {}
     
-    def load_episode_data(self,seasonNumber,episodeNumber):
+    def __init__(self,settings):
         """
             override this by subclass
         """
-        return AbstractEpisode()
+        pass
     
-    def load_show_data(self,name,id):
+    def __getitem__(self,key):
         """
             override this by subclass
         """
-        return AbstractShow()
+        return None
         
 
 class TvDBInterface(GenericInfoInterface):
+    """
+        TheTvDB interface
+        this will provide a interface to the thetvdb and use the tvdb_api for this
+        Warning: we are cheating. we are suposed to map the tvdb_api to the internal structure but we directly map to the tvdb_api
+        beacuse the internal is defined by the tvdb_api
+    """
+    from lib.tvdb_api import tvdb_api, tvdb_exceptions
     
-    def __init__(self):
+    def __init__(self,settings):        
         # There's gotta be a better way of doing this but we don't wanna
         # change the cache value elsewhere
         ltvdb_api_parms = sickbeard.TVDB_API_PARMS.copy()
 
-        ltvdb_api_parms['cache'] = 'recache'
+        for setting in settings:
+            ltvdb_api_parms[setting] = settings[setting]
 
-        self.t = tvdb_api.Tvdb(**ltvdb_api_parms)
+        self.link = self.tvdb_api.Tvdb(**ltvdb_api_parms)
 
     def __getitem__(self, key):
-        return self.t[key]
+        return self.link[key]
 
 
 class TvRageInterface(GenericInfoInterface):
     pass
 
 class AnidbInterface(GenericInfoInterface):
-    pass
-
-
+    """
+        AniDb.net interface
+        this will provide a interface to anidb and use the adba libary for this
+    """
+    import lib.adba as adba
+    
+    def __init__(self,settings):
+        #self.link = self._make_connection(self)
+        pass
+    
+    def _make_connection(self):
+        if not helpers.set_up_anidb_connection():
+            raise
+        return sickbeard.ADBA_CONNECTION
+     
+    def __getitem__(self, key):
+        """Handles tvdb_instance['seriesname'] calls.
+        The dict index should be the show id
+        """
+        if isinstance(key, (int, long)):
+            # Item is integer, treat as show id
+            if key not in self.shows:
+                self._getShowData(key)
+            return self.shows[key]
+        
+        key = key.lower() # make key lower case
+        sid = self._nameToSid(key)
+        return self.shows[sid]
+    
+    def _nameToSid(self,name):
+        anime = self.adba.Anime(self.link, name,load=True)
+        show = self._create_abstract_show(anime)
+        self.shows[anime.aid] = show
+        
+        return show["sid"]
+    
+    def _getShowData(self,aid):
+        anime = self.adba.Anime(self.link, aid,load=True)
+        show = self._create_abstract_show(anime)
+        self.shows[anime.aid] = show
+        
+    
+    def _create_abstract_show(self,anime):
+        """
+            will map every available field from a adba abstract anime to a Abstract show
+        """
+        show = AbstractShow()
+        # TODO: make general if possible otherwise expand
+        show["sid"] = anime.aid
+        show["sieries_name"] = anime.name
+        
+        return show
+        
+        
 
 """
 the folowing "abstract" classes a basicly a copy of the classes found in the tvdb_api
