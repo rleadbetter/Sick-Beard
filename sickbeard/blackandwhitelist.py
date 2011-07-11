@@ -141,6 +141,7 @@ class BlackAndWhiteList(object):
         results = []
         for range in list:
             for keyword in list[range]:
+                string = None
                 if range == "global":
                     string = haystack.name
                 elif haystack.__dict__.has_key(range):
@@ -149,6 +150,9 @@ class BlackAndWhiteList(object):
                     results.append((not mood))
                 else:
                     results.append(False)
+                
+                
+                logger.log(u"-----------keyword: '"+keyword+"' range: '"+range+"' string: '"+str(string)+"'", logger.DEBUG)
                 
                 if string:
                     results.append(self._is_keyword_in_string(string, keyword) == mood)
@@ -165,6 +169,8 @@ class BlackAndWhiteList(object):
         will return true if needle is found in string
         for now a basic find is used
         """
+        logger.log(u"-----------searching '"+needle+"' in '"+string+"'", logger.DEBUG)
+
         return (string.find(needle) >= 0)
 
 class BlackWhiteKeyword(object):

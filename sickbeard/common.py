@@ -149,18 +149,21 @@ class Quality:
     @staticmethod
     def nameQualityAnime(name):
         checkName = lambda list, func: func([re.search(x, name, re.I) for x in list])
-        
+
+        blueRayOptions = checkName(["bluray","blu-ray"],any)
+        hdOptions = checkName(["720p","1280x720"], any)
+
         if checkName(["360p","XviD"], any):
             return Quality.SDTV
         elif checkName(["dvd","480p"], any):
             return Quality.SDDVD
-        elif checkName(["720p","1280x720"], any):
+        elif hdOptions and not blueRayOptions:
             return Quality.HDTV
-        elif checkName(["720p"], any):
+        elif hdOptions and not blueRayOptions:
             return Quality.HDWEBDL
-        elif checkName(["720p", "bluray", "x264"], all):
+        elif blueRayOptions and hdOptions:
             return Quality.HDBLURAY
-        elif checkName(["1080p"], all):
+        elif blueRayOptions and checkName(["1080p", "1920x1080"],any):
             return Quality.FULLHDBLURAY
         else:
             return Quality.UNKNOWN
