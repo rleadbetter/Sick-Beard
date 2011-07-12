@@ -124,7 +124,7 @@ class AnidbInterface(GenericInfoInterface):
         return self.shows[sid]
     
     def _nameToSid(self,name):
-        anime = self.adba.Anime(self.link, name)
+        anime = self.adba.Anime(self.link, name=name, autoCorrectName=True)
         show = self._create_abstract_show(anime)
         self.shows[anime.aid] = show
         
