@@ -99,12 +99,14 @@ class AnidbInterface(GenericInfoInterface):
     import lib.adba as adba
     
     def __init__(self,settings):
-        #self.link = self._make_connection(self)
+        self.link = self._make_connection(self)
         pass
     
     def _make_connection(self):
+        """
         if not helpers.set_up_anidb_connection():
             raise
+        """
         return sickbeard.ADBA_CONNECTION
      
     def __getitem__(self, key):
@@ -122,26 +124,26 @@ class AnidbInterface(GenericInfoInterface):
         return self.shows[sid]
     
     def _nameToSid(self,name):
-        anime = self.adba.Anime(self.link, name,load=True)
+        anime = self.adba.Anime(self.link, name)
         show = self._create_abstract_show(anime)
         self.shows[anime.aid] = show
         
         return show["sid"]
     
     def _getShowData(self,aid):
-        anime = self.adba.Anime(self.link, aid,load=True)
+        anime = self.adba.Anime(self.link, aid)
         show = self._create_abstract_show(anime)
         self.shows[anime.aid] = show
         
     
     def _create_abstract_show(self,anime):
         """
-            will map every available field from a adba abstract anime to a Abstract show
+            will map every available fields from a adba abstract anime to a Abstract show
         """
         show = AbstractShow()
         # TODO: make general if possible otherwise expand
         show["sid"] = anime.aid
-        show["sieries_name"] = anime.name
+        show[anime.aid]["seriesname"] = anime.name
         
         return show
         
