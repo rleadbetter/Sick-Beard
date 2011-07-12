@@ -99,7 +99,7 @@ class AnidbInterface(GenericInfoInterface):
     import lib.adba as adba
     
     def __init__(self,settings):
-        self.link = self._make_connection(self)
+        self.link = self._make_connection()
         pass
     
     def _make_connection(self):

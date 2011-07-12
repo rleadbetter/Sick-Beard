@@ -618,7 +618,7 @@ class TVShow(object):
         logger.log("the name: "+str(myEp["seriesname"]))
         
         infoPAni = InfoInterface("anidb")
-        myEpAni = infoPAni[self.tvdbid]
+        myEpAni = infoPAni[self.name]
         
         
         logger.log("the name: "+str(myEpAni["seriesname"]))
