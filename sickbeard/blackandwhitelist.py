@@ -117,7 +117,7 @@ class BlackAndWhiteList(object):
         list = []
         dict = {}
         for row in sql_result:
-            list.append(BlackWhiteKeyword(row["range"],[row["keyword"]]))
+            list.append(row["keyword"])
             if(dict.has_key(row["range"])):
                 dict[row["range"]].append(row["keyword"])
             else:
@@ -151,9 +151,6 @@ class BlackAndWhiteList(object):
                 else:
                     results.append(False)
                 
-                
-                logger.log(u"-----------keyword: '"+keyword+"' range: '"+range+"' string: '"+str(string)+"'", logger.DEBUG)
-                
                 if string:
                     results.append(self._is_keyword_in_string(string, keyword) == mood)
 
@@ -169,7 +166,6 @@ class BlackAndWhiteList(object):
         will return true if needle is found in string
         for now a basic find is used
         """
-        logger.log(u"-----------searching '"+needle+"' in '"+string+"'", logger.DEBUG)
 
         return (string.find(needle) >= 0)
 
