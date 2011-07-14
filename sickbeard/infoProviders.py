@@ -46,7 +46,7 @@ class InfoInterface(dict):
         return self.inteface[key]
 
 
-class GenericInfoInterface(object):
+class GenericInfoProvider(object):
     """
        generic info interface 
     """
@@ -65,7 +65,7 @@ class GenericInfoInterface(object):
         return None
         
 
-class TvDBInterface(GenericInfoInterface):
+class TvDBInterface(GenericInfoProvider):
     """
         TheTvDB interface
         this will provide a interface to the thetvdb and use the tvdb_api for this
@@ -88,10 +88,10 @@ class TvDBInterface(GenericInfoInterface):
         return self.link[key]
 
 
-class TvRageInterface(GenericInfoInterface):
+class TvRageInterface(GenericInfoProvider):
     pass
 
-class AnidbInterface(GenericInfoInterface):
+class AnidbInterface(GenericInfoProvider):
     """
         AniDb.net interface
         this will provide a interface to anidb and use the adba libary for this
