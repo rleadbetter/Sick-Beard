@@ -45,6 +45,18 @@ class BlackAndWhiteList(object):
     def load_whitelist(self):
         return self._load_list(self._tableWhite)    
     
+    def get_black_keywords_for(self,range):
+        if self.blackDict.has_key(range):
+            return self.blackDict[range]
+        else:
+            return []
+    
+    def get_white_keywords_for(self,range):
+        if self.whiteDict.has_key(range):
+            return self.whiteDict[range]
+        else:
+            return []
+
     def set_black_keywords(self,range,values):
         self._del_all_black_keywors()
         self._add_keywords(self._tableBlack, range, values)
@@ -105,7 +117,7 @@ class BlackAndWhiteList(object):
         list = []
         dict = {}
         for row in sql_result:
-            list.append(BlackWhiteKeyword(row["range"],[row["keyword"]]))
+            list.append(row["keyword"])
             if(dict.has_key(row["range"])):
                 dict[row["range"]].append(row["keyword"])
             else:
@@ -129,6 +141,7 @@ class BlackAndWhiteList(object):
         results = []
         for range in list:
             for keyword in list[range]:
+                string = None
                 if range == "global":
                     string = haystack.name
                 elif haystack.__dict__.has_key(range):
@@ -148,12 +161,13 @@ class BlackAndWhiteList(object):
         else:
             return (not mood)
     
-    def _is_keyword_in_string(self,string,needle):
+    def _is_keyword_in_string(self,fromPost,fromBWList):
         """
-        will return true if needle is found in string
+        will return true if fromBWList is found in fromPost
         for now a basic find is used
         """
-        return (string.find(needle) >= 0)
+
+        return (fromPost.find(fromBWList) >= 0)
 
 class BlackWhiteKeyword(object):
     range = ""
