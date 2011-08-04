@@ -263,13 +263,13 @@ class ApiCall(object):
             will look in args and kwargs
             only methods with the @reg decorator are considered 
         """
-        methodName = "action"
+        methodName = "default"
         if args and self.reg.all.has_key(args[0]):
                 methodName = args[0]
                 args = args[1:]
-        if kwargs.has_key("method") and self.reg.all.has_key(kwargs["method"]):
-            methodName = kwargs["method"]
-            del kwargs["method"]
+        if kwargs.has_key("action") and self.reg.all.has_key(kwargs["action"]):
+            methodName = kwargs["action"]
+            del kwargs["action"]
         self.run = getattr(self, methodName)
         return args
 
