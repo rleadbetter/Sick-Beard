@@ -177,25 +177,50 @@ def call_dispatcher(args, kwargs):
 
     return outDict
 
+# a function decorator that creates a register with all register functions
+# http://stackoverflow.com/questions/5707589/calling-functions-by-array-index-in-python/5707605#5707605
+def make_registrar():
+    registry = {}
+    def registrar(func):
+        registry[func.__name__] = func
+        return func  # normally a decorator returns a wrapped function,
+                    # but here we return func unmodified, after registering it
+    registrar.all = registry
+    return registrar
+
 class ApiCall(object):
     _help = {"desc":"No help message available. Please tell the devs that a help msg is missing for this cmd"}
+    _requiredParams = []
+    _optionalParams = []
+    reg = make_registrar()
     
     def __init__(self, args, kwargs):
-        # missing
-        try:
-            if self._missing:
-                self.run = self.return_missing
-        except AttributeError:
-            pass
+        args = self.method_dispatcher(args, kwargs)
         # help
         if kwargs.has_key("help"):
             self.run = self.return_help
 
-    def run(self):
+        self.args = args
+        self.kwargs = kwargs
+
+    @reg
+    def default(self):
         # override with real output function in subclass
-        return {}
+        return _error("ApiCall.default was called not subclass")
 
     def return_help(self):
+        for list,type in [(self._requiredParams,"requiredParameters"),
+                          (self._optionalParams,"optionalPramameters")]:
+            if self._help.has_key(type):
+                for key in list:
+                    if self._help[type].has_key(key):
+                        continue
+                    self._help[type][key] = "no description"
+            else:
+                for key in list:
+                    self._help[type] = {}
+                    self._help[type][key] = "no description"
+
         return self._help
     
     def return_missing(self):
@@ -204,8 +229,8 @@ class ApiCall(object):
         else:
             msg = "The required parameters: '" + "','".join(self._missing) +"' where not set"
         return _error(msg)
-    
-    def check_params(self,args,kwargs,key,default,required=False):
+
+    def check_params(self,args,kwargs,key,default,required=False,remove=True):
         # TODO: explain this
         """ function to check passed params for the shorthand wrapper
             and to detect missing/required param
@@ -225,21 +250,45 @@ class ApiCall(object):
                 self._missing = []
             if missing and key not in self._missing:
                 self._missing.append(key)
+
+        if required:
+            self._requiredParams.append(key)
+        else:
+            self._optionalParams.append(key)
+
         return default,args
 
-class CMDIndex(ApiCall):
-    _help = {"desc":"display misc sickbeard related information",
-             "requiredParameters":[""],
-             "optionalPramameters":[""]
-             }
+    def method_dispatcher(self,args,kwargs):
+        """ set self.run to the wanted method
+            will look in args and kwargs
+            only methods with the @reg decorator are considered 
+        """
+        methodName = "action"
+        if args and self.reg.all.has_key(args[0]):
+                methodName = args[0]
+                args = args[1:]
+        if kwargs.has_key("method") and self.reg.all.has_key(kwargs["method"]):
+            methodName = kwargs["method"]
+            del kwargs["method"]
+        self.run = getattr(self, methodName)
+        return args
 
-    def __init__(self,args,kwargs):
-        # required
-        # optional
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs)
-        
-    def run(self):
+    def _missing_check(self):
+        try:
+            if self._missing:
+                return True
+        except AttributeError:
+            return False
+
+    missing = property(_missing_check)
+
+class CMDIndex(ApiCall):
+    _help = {"desc":"display misc sickbeard related information"
+             }
+    reg = make_registrar()
+
+    @reg
+    def default(self):
         """ display misc sickbeard related information """
         myDB = db.DBConnection(row_type="dict")
         sqlResults = myDB.select( "SELECT last_backlog FROM info")
@@ -253,22 +302,23 @@ class CMDShows(ApiCall):
     # we need to be able to show the user what is acceptable values for the optional parameters... 
     # 0/1 true/false int/string something.. this is going to be a huge thing when we start doing the setter functions
     _help = {"desc":"display all shows in sickbeard",
-             "requiredParameters":[""],
              "optionalPramameters":{"sort":"show - sort the list of shows by show name instead of tvdbid",
                                     "paused":"0/1 - only show the shows that are set to paused",
                                   },
              }
+    reg = make_registrar()
 
-    def __init__(self,args,kwargs):
+    @reg
+    def default(self):
+        """ display all shows in sickbeard """
         # required
         # optional
-        self.sort,args = self.check_params(args, kwargs, "sort", "id")
-        self.paused,args = self.check_params(args, kwargs, "paused", None)
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs)
-           
-    def run(self):
-        """ display all shows in sickbeard """
+        self.sort,self.args = self.check_params(self.args, self.kwargs, "sort", "id")
+        self.paused,self.args = self.check_params(self.args, self.kwargs, "paused", None)
+        # missing
+        if self.missing:
+            return self.return_missing()
+
         shows = {}
         for show in sickbeard.showList:
             if self.paused and not self.paused == str(show.paused):
@@ -289,26 +339,27 @@ class CMDShows(ApiCall):
 class CMDShow(ApiCall):
     _help = {"desc":"display information for a given show",
              "requiredParameters":{"tvdbid":"tvdbid - thetvdb.com unique id of a show",
-                                  },
-             "optionalPramameters":[""]
+                                  }
              }
+    reg = make_registrar()
 
-    def __init__(self,args,kwargs):
-        # required
-        self.tvdbid,args = self.check_params(args, kwargs, "tvdbid", None, True)
-        # optional
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs) 
-    
-    def run(self):
+    @reg
+    def default(self):
         """ display information for a given show """
+        # required
+        self.tvdbid,self.args = self.check_params(self.args, self.kwargs, "tvdbid", None, True)
+        # optional
+        # missing
+        if self.missing:
+            return self.return_missing()
+
         show = sickbeard.helpers.findCertainShow(sickbeard.showList, int(self.tvdbid))
         if not show:
             raise ApiError("Show not Found")
-    
+
         showDict = {}
         showDict["season_list"] = CMDSeasonList((), {"tvdbid":self.tvdbid}).run()
-    
+
         genreList = []
         if show.genre:
             genreListTmp = show.genre.split("|")
@@ -317,7 +368,7 @@ class CMDShow(ApiCall):
                     genreList.append(genre)
         showDict["genre"] = genreList
         showDict["quality"] = _get_quality_string(show.quality)
-    
+
         try:
             showDict["location"] = show.location
         except:
@@ -335,22 +386,43 @@ class CMDShow(ApiCall):
 
         return showDict
 
+    @reg
+    def delete(self):
+        """ delete a show from sickbeard """
+        # required
+        self.tvdbid,self.args = self.check_params(self.args, self.kwargs, "tvdbid", None, True)
+        # optional
+        # missing
+        if self.missing:
+            return self.return_missing()
+
+        show = sickbeard.helpers.findCertainShow(sickbeard.showList, int(self.tvdbid))
+        if not show:
+            raise ApiError("Show not Found")
+
+        if sickbeard.showQueueScheduler.action.isBeingAdded(show) or sickbeard.showQueueScheduler.action.isBeingUpdated(show): #@UndefinedVariable
+            raise ApiError("Shows can't be deleted while they're being added or updated.")
+
+        show.deleteShow()
+        return {"result": str(show.name)+" has been deleted"}
+
 class CMDStats(ApiCall):
     _help = {"desc":"display episode statistics for a given show",
              "requiredParameters":{"tvdbid":"tvdbid - thetvdb.com unique id of a show",
-                                  },
-             "optionalPramameters":[""]
+                                  }
              }
-
-    def __init__(self, args, kwargs):
-        # required
-        self.tvdbid,args = self.check_params(args, kwargs, "tvdbid", None, False)
-        # optional
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs)
-        
-    def run(self):
+    reg = make_registrar()
+    
+    @reg
+    def default(self):
         """ display episode statistics for a given show """
+        # required
+        self.tvdbid,self.args = self.check_params(self.args, self.kwargs, "tvdbid", None, False)
+        # optional
+        # missing
+        if self.missing:
+            return self.return_missing()
+        
         show = sickbeard.helpers.findCertainShow(sickbeard.showList, int(self.tvdbid))
         if not show:
             raise ApiError("Show not Found")
@@ -445,17 +517,19 @@ class CMDSeasonList(ApiCall):
                                   },
              "optionalPramameters":{"sort":"asc - change the sort order from descending to ascending"}
              }
-
-    def __init__(self, args, kwargs):
-        # required
-        self.tvdbid,args = self.check_params(args, kwargs, "tvdbid", None, True)
-        # optional
-        self.sort,args = self.check_params(args, kwargs, "sort", "desc") # "asc" and "desc" default and fallback is "desc"
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs)
-
-    def run(self):
+    reg = make_registrar()
+    
+    @reg
+    def default(self):
         """ display the season list for a given show """
+        # required
+        self.tvdbid,self.args = self.check_params(self.args, self.kwargs, "tvdbid", None, True)
+        # optional
+        self.sort,self.args = self.check_params(self.args, self.kwargs, "sort", "desc") # "asc" and "desc" default and fallback is "desc"
+        # missing
+        if self.missing:
+            return self.return_missing()
+
         show = sickbeard.helpers.findCertainShow(sickbeard.showList, int(self.tvdbid))
         if not show:
             raise ApiError("Show not Found")
@@ -478,17 +552,19 @@ class CMDSeasons(ApiCall):
              "optionalPramameters":{"season":"## - the season number",
                                   }
              }
-
-    def __init__(self, args, kwargs):
-        # required
-        self.tvdbid,args = self.check_params(args, kwargs, "tvdbid", None, True)
-        # optional
-        self.season,args = self.check_params(args, kwargs, "season", None, False)
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs)
-
-    def run(self):
+    reg = make_registrar()
+    
+    @reg
+    def default(self):
         """ display a listing of episodes for all or a given show """
+        # required
+        self.tvdbid,self.args = self.check_params(self.args, self.kwargs, "tvdbid", None, True)
+        # optional
+        self.season,self.args = self.check_params(self.args, self.kwargs, "season", None, False)
+        # missing
+        if self.missing:
+            return self.return_missing()
+        
         show = sickbeard.helpers.findCertainShow(sickbeard.showList, int(self.tvdbid))
         if not show:
             raise ApiError("Show not Found")
@@ -533,19 +609,21 @@ class CMDEpisode(ApiCall):
                                   },
              "optionalPramameters":{"full_path":"show the full absolute path (if valid) instead of a relative path for the episode location"}
              }
-
-    def __init__(self, args, kwargs):
-        # required
-        self.tvdbid,args = self.check_params(args, kwargs, "tvdbid", None, True)
-        self.s,args = self.check_params(args, kwargs, "season", None, True)
-        self.e,args = self.check_params(args, kwargs, "episode", None, True)
-        # optional
-        self.fullPath,args = self.check_params(args, kwargs, "full_path", "0")
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs)
-
-    def run(self):
+    reg = make_registrar()
+    
+    @reg
+    def default(self):
         """ display detailed info about an episode """
+        # required
+        self.tvdbid,self.args = self.check_params(self.args, self.kwargs, "tvdbid", None, True)
+        self.s,self.args = self.check_params(self.args, self.kwargs, "season", None, True)
+        self.e,self.args = self.check_params(self.args, self.kwargs, "episode", None, True)
+        # optional
+        self.fullPath,self.args = self.check_params(self.args, self.kwargs, "full_path", "0")
+        # missing
+        if self.missing:
+            return self.return_missing()
+        
         show = sickbeard.helpers.findCertainShow(sickbeard.showList, int(self.tvdbid))
         if not show:
             raise ApiError("Show not Found")
@@ -578,19 +656,20 @@ class CMDEpisode(ApiCall):
 
 class CMDComingEpisodes(ApiCall):
     _help = {"desc":"display the coming episodes",
-             "requiredParameters":[""],
              "optionalPramameters":{"sort":"date/network/show - change the sort order"}
              }
-
-    def __init__(self, args, kwargs): 
+    reg = make_registrar()
+    
+    @reg
+    def default(self):
+        """ display the coming episodes """
         # required
         # optional
-        self.sort,args = self.check_params(args, kwargs, "sort", "date")
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs)
+        self.sort,self.args = self.check_params(self.args, self.kwargs, "sort", "date")
+        # missing
+        if self.missing:
+            return self.return_missing()
 
-    def run(self):
-        """ display the coming episodes """
         today = datetime.date.today().toordinal()
         next_week = (datetime.date.today() + datetime.timedelta(days=7)).toordinal()
         recently = (datetime.date.today() - datetime.timedelta(days=3)).toordinal()
@@ -648,22 +727,23 @@ class CMDComingEpisodes(ApiCall):
 
 class CMDHistory(ApiCall):
     _help = {"desc":"display sickbeard downloaded/snatched history",
-             "requiredParameters":[""],
              "optionalPramameters":{"limit":"## - limit returned results",
                                     "type":"downloaded/snatched - only show a specific type of results",
                                    }
              }
-
-    def __init__(self, args, kwargs):
+    reg = make_registrar()
+    
+    @reg
+    def dafault(self):
+        """ display sickbeard downloaded/snatched history """
         # required
         # optional
-        self.limit,args = self.check_params(args, kwargs, "limit", 100)
-        self.type,args = self.check_params(args, kwargs, "type", None)
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs)
-
-    def run(self):
-        """ display sickbeard downloaded/snatched history """
+        self.limit,self.args = self.check_params(self.args, self.kwargs, "limit", 100)
+        self.type,self.args = self.check_params(self.args, self.kwargs, "type", None)
+        # missing
+        if self.missing:
+            return self.return_missing()
+        
         self.typeCodes = []
         if self.type == "downloaded":
             self.type = "Downloaded"
@@ -698,22 +778,43 @@ class CMDHistory(ApiCall):
             results.append(row)
         return results
 
+    @reg
+    def trim(self):
+        """ trim sickbeard's history """
+        # required
+        # optional
+        self.clear,self.args = self.check_params(self.args, self.kwargs, "clear", 0)
+        # missing, help
+        if self.missing:
+            return self.missing
+        
+        myDB = db.DBConnection()
+        #why does this work if clear= any int?
+        if (self.clear) and (_is_int(self.clear) == 1):
+            myDB.action("DELETE FROM history WHERE 1=1")
+            return {"result": "History Cleared"}
+        else:
+            myDB.action("DELETE FROM history WHERE date < "+str((datetime.datetime.today()-datetime.timedelta(days=30)).strftime(history.dateFormat)))
+            return {"result": "Removed history entries greater than 30 days old"}
+
+
 class CMDExceptions(ApiCall):
     _help = {"desc":"display scene exceptions for all or a given show",
-             "requiredParameters":[""],
              "optionalPramameters":{"tvdbid":"tvdbid - thetvdb.com unique id of a show",
                                   }
              }
-
-    def __init__(self, args, kwargs):
+    reg = make_registrar()
+    
+    @reg
+    def defauld(self):
+        """ display scene exceptions for all or a given show """
         # required
         # optional
-        self.tvdbid,args = self.check_params(args, kwargs, "tvdbid", None, False)
-        # super, missing, help
-        ApiCall.__init__(self, args, kwargs)
-
-    def run(self):
-        """ display scene exceptions for all or a given show """
+        self.tvdbid,self.args = self.check_params(self.args, self.kwargs, "tvdbid", None)
+        # missing
+        if self.missing:
+            self.return_missing()
+        
         myDB = db.DBConnection("cache.db",row_type="dict")
 
         if self.tvdbid == None:
@@ -739,19 +840,20 @@ class CMDExceptions(ApiCall):
 
 class CMDHelp(ApiCall):
     _help = {"desc":"display help information for a given subject/command",
-             "requiredParameters":[""],
              "optionalPramameters":{"subject":"command - the top level command",
                                   }
              }
-
-    def __init__(self, args, kwargs):
-        # required
-        # optional
-        self.subject,args = self.check_params(args, kwargs, "subject", "help")
-        ApiCall.__init__(self, args, kwargs)
-
+    reg = make_registrar()
+    
+    @reg
     def run(self):
         """ display help information for a given subject/command """
+        # required
+        # optional
+        self.subject,self.args = self.check_params(self.args, self.kwargs, "subject", "help")
+        if self.missing:
+            self.return_missing()
+        
         if _functionMaper.has_key(self.subject):
             msg = _functionMaper.get(self.subject)((),{"help":1}).run()
         else:
@@ -760,7 +862,6 @@ class CMDHelp(ApiCall):
 
 class CMDTrimHistory(ApiCall):
     _help = {"desc":"trim sickbeard's history",
-             "requiredParameters":[""],
              "optionalPramameters":{"clear":"1 - trim all of history (same as clear history)",
                                   }
              }
@@ -787,8 +888,7 @@ class CMDTrimHistory(ApiCall):
 class CMDDeleteShow(ApiCall):
     _help = {"desc":"delete a show from sickbeard",
              "requiredParameters":{"tvdbid":"tvdbid - thetvdb.com unique id of a show",
-                                  },
-             "optionalPramameters":[""]
+                                  }
              }
 
     def __init__(self,args,kwargs):
