@@ -27,6 +27,7 @@ import threading
 import datetime
 
 from Cheetah.Template import Template
+import Cheetah.DummyTransaction
 import cherrypy.lib
 
 import sickbeard

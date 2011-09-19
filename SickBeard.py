@@ -100,6 +100,17 @@ def daemonize():
         logger.log(u"Writing PID " + pid + " to " + str(sickbeard.PIDFILE))
         file(sickbeard.PIDFILE, 'w').write("%s\n" % pid)
 
+def getSystemDataDir(progdir):
+    if sys.platform == 'darwin':
+        home = os.environ.get('HOME')
+        if home:
+            return '%s/Library/Application Support/SickBeard' % home
+        else:
+            return progdir
+    elif sys.platform == "win32":
+        #TODO: implement
+        return progdir
+
 def main():
     """
     TV for me
@@ -109,7 +120,7 @@ def main():
     sickbeard.MY_FULLNAME = os.path.normpath(os.path.abspath(__file__))
     sickbeard.MY_NAME = os.path.basename(sickbeard.MY_FULLNAME)
     sickbeard.PROG_DIR = os.path.dirname(sickbeard.MY_FULLNAME)
-    sickbeard.DATA_DIR = sickbeard.PROG_DIR
+    sickbeard.DATA_DIR = getSystemDataDir(sickbeard.PROG_DIR)
     sickbeard.MY_ARGS = sys.argv[1:]
     sickbeard.CREATEPID = False
 
@@ -156,7 +167,10 @@ def main():
 
         # use a different port
         if o in ('-p', '--port'):
-            forcedPort = int(a)
+            try:
+                forcedPort = int(a)
+            except ValueError:
+                print "Can't parse port, using config / default value instead"
 
         # Run as a daemon
         if o in ('-d', '--daemon'):
