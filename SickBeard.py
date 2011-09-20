@@ -42,6 +42,8 @@ from sickbeard.webserveInit import initWebServer
 
 from lib.configobj import ConfigObj
 
+from threading import Thread
+
 signal.signal(signal.SIGINT, sickbeard.sig_handler)
 signal.signal(signal.SIGTERM, sickbeard.sig_handler)
 
@@ -322,4 +324,31 @@ def main():
 if __name__ == "__main__":
     if sys.hexversion >= 0x020600F0:
         freeze_support()
-    main()
+
+    if getattr(sys, 'frozen', None) == 'macosx_app':
+        # OSX binary
+        try:
+            from PyObjCTools import AppHelper
+            from sickbeard.osxmenu import SickBeardDelegate
+
+            class startApp(Thread):
+                def __init__(self):
+                    logger.log('[osx] sabApp Starting - starting main thread', logger.MESSAGE)
+                    Thread.__init__(self)
+                def run(self):
+                    main()
+                    logger.log('[osx] sabApp Stopping - main thread quit ', logger.MESSAGE)
+                    AppHelper.stopEventLoop()
+                def stop(self):
+                    logger.log('[osx] sabApp Quit - stopping main thread ', logger.MESSAGE)
+                    sickbeard.halt()
+                    logger.log('[osx] sabApp Quit - main thread stopped', logger.MESSAGE)
+
+            sickApp = startApp()
+            sickApp.start()
+            AppHelper.runEventLoop()
+        except Exception, e:
+            print str(e)
+            main()
+    else:
+        main()
