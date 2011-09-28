@@ -228,10 +228,11 @@ class TVShow(object):
 
         cachedShow = t[self.tvdbid]
         cachedSeasons = {}
-        deleteEp = False
 
         for curResult in sqlResults:
 
+            deleteEp = False
+                    
             curSeason = int(curResult["season"])
             curEpisode = int(curResult["episode"])
             if curSeason not in cachedSeasons:
