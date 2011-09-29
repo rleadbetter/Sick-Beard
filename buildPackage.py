@@ -1,3 +1,4 @@
+# coding=UTF-8
 """
 Usage:
     python buildPackage.py
@@ -9,12 +10,12 @@ import sys
 import os
 import re
 import platform
-import subprocess
 import getopt
 import shutil
 import glob
 from datetime import date
-from subprocess import call
+import subprocess
+from subprocess import call, Popen
 
 from sickbeard.version import SICKBEARD_VERSION
 ######################
@@ -23,16 +24,18 @@ pythonMainPy = "SickBeard.py"
 
 name = "SickBeard"
 version = SICKBEARD_VERSION # master / myAnime
+majorVersion = "alpha"
+build = version.split(" ")[1]
 osVersion = "Unknown"
-#gitLastCommit = str(check_output(["git", "rev-parse", "HEAD"])).rstrip()
-gitLastCommit = "unknown"
+gitLastCommit = subprocess.Popen(["git", "rev-parse", "HEAD"], stdout=subprocess.PIPE).communicate()[0].strip()
 bundleIdentifier = "com.sickbeard.sickbeard"
 todayString = date.today().strftime("%y-%m-%d")
+thisYearString = date.today().strftime("%Y")
 
 # OSX
 osxOriginalSpraseImageZip = "osx/template.sickbeard.sparseimage.zip"
 osxSpraseImage = "build/template.sickbeard.sparseimage"
-osxDmgImage = "osx/sb_osx2.png" # using "" will leave the default image at time of writing this is osx/sb_sb_osx.png
+osxDmgImage = "" # using "" will leave the default image at time of writing this is osx/sb_sb_osx.png
 osxAppIcon = "osx/sickbeard.icns"
 # mode
 leaveBuild = False
@@ -47,9 +50,9 @@ os.system("mkdir build") # create tmp build dir
 #####################
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], "", [ 'leaveBuildDir', 'onlyApp', 'dmgBG=', 'py2appArgs=']) #@UnusedVariable
+    opts, args = getopt.getopt(sys.argv[1:], "", [ 'leaveBuildDir', 'onlyApp', 'dmgbg=', 'py2appArgs=']) #@UnusedVariable
 except getopt.GetoptError:
-    print "Available options: --dmgBG, --leaveBuildDir, --onlyApp, --py2appArgs"
+    print "Available options: --dmgbg, --leaveBuildDir, --onlyApp, --py2appArgs"
     exit(1)
 
 for o, a in opts:
@@ -77,9 +80,9 @@ if sys.platform == 'darwin':
 
     osVersion = platform.mac_ver()[0]
     osVersionMayor, osVersionMinor, osVersionMicro = osVersion.split(".")
-    osxDmg = "dist/" + name + ".dmg" # dmg file name
-    volumeName = "%s-%s-%s" % (name , version, todayString) # volume name
-
+    volumeName = "%s-osx-%s-build%s" % (name , majorVersion, build) # volume name
+    osxDmg = "dist/%s.dmg" % (volumeName) # dmg file name
+    #SickBeard-win32-alpha-build489.zip
     # Check which Python flavour
     apple_py = 'ActiveState' not in sys.copyright
 
@@ -88,16 +91,16 @@ if sys.platform == 'darwin':
                   'sickbeard',
                   'lib',
                   ('', glob.glob("osx/resources/*"))]
+    _NSHumanReadableCopyright = "(c) %s The %s-Team\nBuild on: OSX %s\nBased on: %s (%s)\nPython used & incl: %s" % (thisYearString, name , osVersion, version, gitLastCommit , str(sys.version))
 
     OPTIONS = {'argv_emulation': False,
                'iconfile': osxAppIcon,
                'packages':["email"],
                'plist': {'NSUIElement': 1,
-                        'CFBundleShortVersionString': version + " " + todayString,
-                        'NSHumanReadableCopyright': 'The ' + name + '-Team',
+                        'CFBundleShortVersionString': "build " + build,
+                        'NSHumanReadableCopyright': _NSHumanReadableCopyright,
                         'CFBundleIdentifier': bundleIdentifier,
-                        'CFBundleVersion' : version + " " + todayString,
-                        'CFBundleGetInfoString' : "".join(["Build on: OSX ", osVersion, ". Based on: ", version, "(", gitLastCommit , ")"])
+                        'CFBundleVersion' : version + " " + todayString
                         }
                }
     if len(sys.argv) > 1:
@@ -135,55 +138,85 @@ if sys.platform == 'darwin':
     # Take care to preserve the special attributes of the background image file
     if osxDmgImage:
         if os.path.isfile(osxDmgImage):
-            print "Writing new background image. %s ..." % os.path.abspath(osxDmgImage)
+            print "Writing new background image. %s ..." % os.path.abspath(osxDmgImage),
+            # we need to read and write the data because otherwise we would lose the special hidden flag on the file
             f = open(osxDmgImage, 'rb')
             png = f.read()
             f.close()
             f = open('/Volumes/SickBeard/sb_osx.png', 'wb')
             f.write(png)
             f.close()
+            print "ok"
         else:
             print "The provided image path is not a file"
     else:
-        print "Using default background image"
+        print "# Using default background image"
 
     # Rename the volumeName
     fp = open('build/mount.log', 'r')
     data = fp.read()
     fp.close()
     m = re.search(r'/dev/(\w+)\s+', data)
-    print "Renaming the volume ..."
-    volRenameCmd = call(["disktool", "-n", m.group(1), volumeName], stdout=subprocess.PIPE)
+    print "Renaming the volume ...",
+    if not call(["disktool", "-n", m.group(1), volumeName], stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+        print "ok"
+    else:
+        print "ERROR"
 
     #copy builded app to mounted sparseimage
-    print "Copying SickBeard.app ..."
-    copyCmd = call(["cp", "-r", "dist/SickBeard.app", "/Volumes/%s/" % volumeName], stdout=subprocess.PIPE)
+    print "Copying SickBeard.app ...",
+    if not call(["cp", "-r", "dist/SickBeard.app", "/Volumes/%s/" % volumeName], stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+        print "ok"
+    else:
+        print "ERROR"
 
-    print "Sleeping 5"
+    #copy scripts to mounted sparseimage
+    print "Copying Scripts ...",
+    if not call(["cp", "-r", "autoProcessTV/autoProcessTV.cfg.sample", "/Volumes/%s/Scripts/autoProcessTV.cfg" % volumeName], stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+        print "ok",
+    else:
+        print "ERROR",
+    if not call(["cp", "-r", "autoProcessTV/autoProcessTV.py", "/Volumes/%s/Scripts/" % volumeName], stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+        print "ok",
+    else:
+        print "ERROR",
+    if not call(["cp", "-r", "autoProcessTV/sabToSickBeard.py", "/Volumes/%s/Scripts/" % volumeName], stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+        print "ok"
+    else:
+        print "ERROR"
+
+    print "# Sleeping 5"
     os.system("sleep 5")
     #Unmount sparseimage
-    print "Unmount sparseimage ..."
-    unmountCmd = call(["hdiutil", "eject", "/Volumes/%s/" % volumeName], stdout=subprocess.PIPE)
+    print "Unmount sparseimage ...",
+    if not call(["hdiutil", "eject", "/Volumes/%s/" % volumeName], stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+        print "ok"
+    else:
+        print "ERROR"
 
     #Convert sparseimage to read only compressed dmg
-    print "Convert sparseimage to read only compressed dmg ..."
-    convertCmd = call(["hdiutil", "convert", osxSpraseImage, "-format", "UDBZ", "-o", osxDmg], stdout=subprocess.PIPE)
+    print "Convert sparseimage to read only compressed dmg ...",
+    if not call(["hdiutil", "convert", osxSpraseImage, "-format", "UDBZ", "-o", osxDmg], stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+        print "ok"
+    else:
+        print "ERROR"
 
     #Make image internet-enabled
-    print "Make image internet-enabled ..."
-    enabelInetCmd = call(["hdiutil", "internet-enable", osxDmg], stdout=subprocess.PIPE)
+    print "Make image internet-enabled ...",
+    if not call(["hdiutil", "internet-enable", osxDmg], stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+        print "ok"
+    else:
+        print "ERROR"
 
     if not leaveBuild:
-        print "Removing build dir ..."
+        print "Removing build dir ...",
         shutil.rmtree('build')
+        print "ok"
 
     print
     print "########################################"
-    if not (volRenameCmd and copyCmd and unmountCmd and convertCmd and enabelInetCmd):
-        print "App build successful."
-        print "DMG is located at %s" % os.path.abspath(osxDmg)
-    else:
-        print "There was an error somewhere :(", (volRenameCmd , copyCmd , unmountCmd , convertCmd , enabelInetCmd)
+    print "App build successful."
+    print "DMG is located at %s" % os.path.abspath(osxDmg)
     print "########################################"
 
 exit()

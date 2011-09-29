@@ -30,7 +30,7 @@ class SickBeardDelegate(NSObject):
         #if (debug == 1) : NSLog("[osx] awake")
         self.buildMenu()
         #Timer for updating menu
-        self.timer = NSTimer.alloc().initWithFireDate_interval_target_selector_userInfo_repeats_(start_time, 3.0, self, 'updateAction:', None, True)
+        self.timer = NSTimer.alloc().initWithFireDate_interval_target_selector_userInfo_repeats_(start_time, 1.0, self, 'updateAction:', None, True)
         NSRunLoop.currentRunLoop().addTimer_forMode_(self.timer, NSDefaultRunLoopMode)
         NSRunLoop.currentRunLoop().addTimer_forMode_(self.timer, NSEventTrackingRunLoopMode)
 #        NSRunLoop.currentRunLoop().addTimer_forMode_(self.timer, NSModalPanelRunLoopMode)
@@ -53,10 +53,7 @@ class SickBeardDelegate(NSObject):
         self.status_item.setToolTip_('SickBeard')
         self.status_item.setEnabled_(YES)
 
-        if (debug == 1) : NSLog("[osx] menu 1 building")
-
-        #Wait for SABnzbd Initialisation
-        #cherrypy.engine.wait(cherrypy.process.wspbus.states.STARTED)
+        NSLog("[osx] menu 1 building")
 
         #Variables
         self.state = "Idle"
@@ -112,6 +109,12 @@ class SickBeardDelegate(NSObject):
 
     def updateAction_(self, sender):
         self._searchUpdate()
+        """
+        if sickbeard.RUNNING_STATE == sickbeard.STATE_RESTARTING:
+            self.setMenuTitle("\n\n%s\n" % ('Restarting...'))
+        else:
+            self.setMenuTitle("")
+        """ 
 
     def _searchUpdate(self):
         
@@ -174,6 +177,6 @@ class SickBeardDelegate(NSObject):
             title = NSAttributedString.alloc().initWithString_attributes_(text, titleAttributes)
             self.status_item.setAttributedTitle_(title)
         except :
-            logging.info("[osx] setMenuTitle Exception %s" % (sys.exc_info()[0]))
+            NSLog("[osx] setMenuTitle Exception %s" % (sys.exc_info()[0]))
 
 
