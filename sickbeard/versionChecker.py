@@ -29,6 +29,8 @@ import zipfile, tarfile
 
 from urllib2 import URLError
 from lib.pygithub import github
+import sys
+from subprocess import call
 
 class CheckVersion():
     """
@@ -42,6 +44,8 @@ class CheckVersion():
             self.updater = WindowsUpdateManager()
         elif self.install_type == 'git':
             self.updater = GitUpdateManager()
+        elif self.install_type == 'mac':
+            self.updater = MacUpdateManager()
         elif self.install_type == 'source':
             self.updater = SourceUpdateManager()
         else:
@@ -64,7 +68,10 @@ class CheckVersion():
         """
 
         # check if we're a windows build
-        if version.SICKBEARD_VERSION.startswith('build '):
+        if getattr(sys, 'frozen', None) == 'macosx_app':
+            install_type = 'mac'
+        # check if we're a windows build
+        elif version.SICKBEARD_VERSION.startswith('build '):
             install_type = 'win'
         elif os.path.isdir(os.path.join(sickbeard.PROG_DIR, '.git')):
             install_type = 'git'
@@ -189,6 +196,88 @@ class WindowsUpdateManager(UpdateManager):
 
             # delete the zip
             logger.log(u"Deleting zip file from "+str(filename))
+            os.remove(filename)
+
+        except Exception, e:
+            logger.log(u"Error while trying to update: "+ex(e), logger.ERROR)
+            return False
+
+        return True
+
+class MacUpdateManager(UpdateManager):
+
+    def __init__(self):
+        self._cur_version = None
+        self._newest_version = None
+
+        self.gc_url = 'http://lad1337.de/list_sickbeard_builds.php'
+        self.gc_url_human = 'http://lad1337.de/#top'
+
+    def _find_installed_version(self):
+        regex = "(\d+)"
+        match = re.search(regex, sickbeard.version.SICKBEARD_VERSION)
+        if match:
+            return int(match.group(1))
+        return 0
+
+    def _find_newest_version(self, whole_link=False):
+        """
+        Checks google code for the newest Windows binary build. Returns either the
+        build number or the entire build URL depending on whole_link's value.
+
+        whole_link: If True, returns the entire URL to the release. If False, it returns
+                    only the build number. default: False
+        """
+        regex = "SickBeard\-alpha\-(\d+).dmg"
+
+        svnFile = urllib.urlopen(self.gc_url)
+
+        for curLine in svnFile.readlines():
+            match = re.search(regex, curLine)
+            if match:
+                if whole_link:
+                    return "http://lad1337.de/sickbeard/" + match.group(0)
+                else:
+                    return int(match.group(1))
+
+        return None
+
+    def need_update(self):
+        self._cur_version = self._find_installed_version()
+        self._newest_version = self._find_newest_version()
+
+        if self._newest_version > self._cur_version:
+            return True
+
+    def set_newest_text(self):
+        new_str = 'There is a <a href="'+self.gc_url_human+'" onclick="window.open(this.href); return false;">newer version available</a> (build '+str(self._newest_version)+')'
+        new_str += "&mdash; <a href=\""+self.get_update_url()+"\">Update Now</a>"
+        sickbeard.NEWEST_VERSION_STRING = new_str
+
+    def update(self):
+
+        new_link = self._find_newest_version(True)
+
+        if not new_link:
+            logger.log(u"Unable to find a new version link on lad1337.de , not updating")
+            return False
+
+        # download the dmg
+        try:
+            logger.log(u"Downloading update file from "+str(new_link))
+            (filename, headers) = urllib.urlretrieve(new_link) #@UnusedVariable
+
+            os.system("hdiutil mount %s | grep /Volumes/SickBeard >update_mount.log" % (filename))
+            fp = open('update_mount.log', 'r')
+            data = fp.read()
+            fp.close()
+            m = re.search(r'/dev/(\w+)\s+', data)
+            updateVolume = m.group(1)
+            logger.log(u"Copying app from /Volumes/%s/SickBeard.app to %s" %(updateVolume,"/Applications"))
+            call(["cp", "-rf", "/Volumes/%s/SickBeard.app" % updateVolume, "/Applications"])
+            
+            # delete the zip
+            logger.log(u"Deleting dmg file from "+str(filename))
             os.remove(filename)
 
         except Exception, e:
