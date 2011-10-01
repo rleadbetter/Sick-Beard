@@ -30,11 +30,8 @@ class SickBeardDelegate(NSObject):
         #if (debug == 1) : NSLog("[osx] awake")
         self.buildMenu()
         #Timer for updating menu
-<<<<<<< HEAD
         self.timer = NSTimer.alloc().initWithFireDate_interval_target_selector_userInfo_repeats_(start_time, 1.0, self, 'updateAction:', None, True)
-=======
-        self.timer = NSTimer.alloc().initWithFireDate_interval_target_selector_userInfo_repeats_(start_time, 3.0, self, 'updateAction:', None, True)
->>>>>>> 5a1c60202b7d250a3341eee3743177aa261d6f49
+
         NSRunLoop.currentRunLoop().addTimer_forMode_(self.timer, NSDefaultRunLoopMode)
         NSRunLoop.currentRunLoop().addTimer_forMode_(self.timer, NSEventTrackingRunLoopMode)
 #        NSRunLoop.currentRunLoop().addTimer_forMode_(self.timer, NSModalPanelRunLoopMode)
@@ -57,14 +54,7 @@ class SickBeardDelegate(NSObject):
         self.status_item.setToolTip_('SickBeard')
         self.status_item.setEnabled_(YES)
 
-<<<<<<< HEAD
         NSLog("[osx] menu 1 building")
-=======
-        if (debug == 1) : NSLog("[osx] menu 1 building")
-
-        #Wait for SABnzbd Initialisation
-        #cherrypy.engine.wait(cherrypy.process.wspbus.states.STARTED)
->>>>>>> 5a1c60202b7d250a3341eee3743177aa261d6f49
 
         #Variables
         self.state = "Idle"
@@ -120,15 +110,6 @@ class SickBeardDelegate(NSObject):
 
     def updateAction_(self, sender):
         self._searchUpdate()
-<<<<<<< HEAD
-        """
-        if sickbeard.RUNNING_STATE == sickbeard.STATE_RESTARTING:
-            self.setMenuTitle("\n\n%s\n" % ('Restarting...'))
-        else:
-            self.setMenuTitle("")
-        """ 
-=======
->>>>>>> 5a1c60202b7d250a3341eee3743177aa261d6f49
 
     def _searchUpdate(self):
         
@@ -191,10 +172,7 @@ class SickBeardDelegate(NSObject):
             title = NSAttributedString.alloc().initWithString_attributes_(text, titleAttributes)
             self.status_item.setAttributedTitle_(title)
         except :
-<<<<<<< HEAD
             NSLog("[osx] setMenuTitle Exception %s" % (sys.exc_info()[0]))
-=======
-            logging.info("[osx] setMenuTitle Exception %s" % (sys.exc_info()[0]))
->>>>>>> 5a1c60202b7d250a3341eee3743177aa261d6f49
+
 
 
