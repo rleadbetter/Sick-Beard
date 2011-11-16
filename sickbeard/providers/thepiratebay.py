@@ -39,6 +39,8 @@ class ThePirateBayProvider(generic.TorrentProvider):
         
         self.supportsBacklog = True
 
+        self.supportsAbsoluteNumbering = True
+        
         self.cache = ThePirateBayCache(self)
 
         self.url = 'http://thepiratebay.org/'
@@ -54,9 +56,9 @@ class ThePirateBayProvider(generic.TorrentProvider):
     def imageName(self):
         return 'thepiratebay.gif'
     
-    def getQuality(self, item):
+    def getQuality(self, item, anime=False):
         
-        quality = Quality.nameQuality(item[0])
+        quality = Quality.nameQuality(item[0], anime)
         return quality    
 
     def _get_airbydate_season_range(self, season):
@@ -107,6 +109,10 @@ class ThePirateBayProvider(generic.TorrentProvider):
        
         search_string = []
        
+        if ep_obj:
+            search_string = show_name_helpers.makeSceneSearchString(ep_obj)
+            return search_string
+            
         if not ep_obj:
             return []
                 

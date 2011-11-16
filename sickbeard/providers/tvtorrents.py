@@ -31,6 +31,8 @@ class TvTorrentsProvider(generic.TorrentProvider):
         generic.TorrentProvider.__init__(self, "TvTorrents")
         
         self.supportsBacklog = False
+        
+        self.supportsAbsoluteNumbering = True
 
         self.cache = TvTorrentsCache(self)
 

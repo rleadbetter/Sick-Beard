@@ -60,7 +60,7 @@ class KATProvider(rssbacklogtorrent.RSSBacklogProvider):
 
 		if not rawTitle:
 		    logger.log(u"The XML returned from the KAT RSS feed is incomplete, this result is unusable: " + data, logger.ERROR)
-		    return false
+		    return False
 
 	 	seeds = item.findtext('seeds')
 		logger.log(rawTitle + " had " + seeds + " seeds", logger.DEBUG)
