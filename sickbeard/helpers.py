@@ -23,10 +23,11 @@ import stat
 import urllib, urllib2
 import re, socket
 import shutil
+import locale
 
 import sickbeard
 
-from sickbeard.exceptions import MultipleShowObjectsException
+from sickbeard.exceptions import MultipleShowObjectsException, EpisodeNotFoundByAbsoluteNumerException
 from sickbeard import logger, classes
 from sickbeard.common import USER_AGENT, mediaExtensions, XML_NSMAP
 
@@ -37,6 +38,8 @@ from sickbeard.exceptions import ex
 from lib.tvdb_api import tvdb_api, tvdb_exceptions
 
 import xml.etree.cElementTree as etree
+from sickbeard.name_parser.parser import NameParser, InvalidNameException
+import lib.adba as adba
 
 urllib._urlopener = classes.SickBeardURLopener()
 
@@ -321,8 +324,10 @@ def buildNFOXML(myShow):
 
 
 def searchDBForShow(regShowName):
-
-    showNames = [re.sub('[. -]', ' ', regShowName)]
+    """Return False|(tvdb_id,show_name)
+    Sanitize given show name into multiple versions and see if we have a record of that show name in the DB
+    """
+    showNames = [re.sub('[. -]', ' ', regShowName),regShowName]
 
     myDB = db.DBConnection()
 
@@ -332,11 +337,21 @@ def searchDBForShow(regShowName):
 
         sqlResults = myDB.select("SELECT * FROM tv_shows WHERE show_name LIKE ? OR tvr_name LIKE ?", [showName, showName])
 
+        # if we find exactly one show return its name and tvdb_id
         if len(sqlResults) == 1:
             return (int(sqlResults[0]["tvdb_id"]), sqlResults[0]["show_name"])
+        else:
+            tvdbid = get_tvdbid(showName,sickbeard.showList)
+       
+       
+        #TODO: this is bad taking the other function and doing a lookup in the db. REFACTORE! this whole thing
+        if tvdbid:
+            sqlResults = myDB.select("SELECT * FROM tv_shows WHERE tvdb_id = ?", [tvdbid])
+            # if we find exactly one show return its name and tvdb_id
+            if len(sqlResults) == 1:
+                return (int(sqlResults[0]["tvdb_id"]), sqlResults[0]["show_name"])
 
         else:
-
             # if we didn't get exactly one result then try again with the year stripped off if possible
             match = re.match(yearRegex, showName)
             if match and match.group(1):
@@ -473,6 +488,197 @@ def fixSetGroupID(childPath):
             logger.log(u"Respecting the set-group-ID bit on the parent directory for %s" % (childPath), logger.DEBUG)
         except OSError:
             logger.log(u"Failed to respect the set-group-ID bit on the parent directory for %s (setting group ID %i)" % (childPath, parentGID), logger.ERROR)
+
+def is_anime_in_show_list():
+    for show in sickbeard.showList:
+        if show.is_anime:
+            return True
+    return False
+
+def update_anime_support():
+    sickbeard.ANIMESUPPORT = is_anime_in_show_list()
+
+def get_all_episodes_from_absolute_number(show, tvdb_id, absolute_numbers):
+    if len(absolute_numbers) == 0:
+        raise EpisodeNotFoundByAbsoluteNumerException()
+
+    episodes = []
+    season = None
+    
+    if not show and not tvdb_id:
+        return (season, episodes)
+    
+    if not show and tvdb_id:
+        show = findCertainShow(sickbeard.showList, tvdb_id)
+
+    for absolute_number in absolute_numbers:
+        ep = show.getEpisode(None, None,absolute_number=absolute_number)
+        if ep:
+            episodes.append(ep.episode)
+        else:
+            raise EpisodeNotFoundByAbsoluteNumerException()
+        season = ep.season # this will always take the last found seson so eps that cross the season border are not handeled well
+    
+    return (season, episodes)
+
+def parse_result_wrapper(show, toParse, showList=[], tvdbActiveLookUp=False):
+    """Retruns a parse result or a InvalidNameException
+        it will try to take the correct regex for the show if given
+        if not given it will try Anime first then Normal
+        if name is parsed as anime it will lookup the tvdbid and check if we have it as an anime
+        only if both is true we will consider it an anime
+        
+        to get the tvdbid the tvdbapi might be used if tvdbActiveLookUp is True
+    """
+    if len(showList) == 0:
+        showList = sickbeard.showList
+
+    if show and show.is_anime:
+        modeList = [NameParser.ANIME_REGEX,NameParser.NORMAL_REGEX]    
+    elif show and not show.is_anime:
+        modeList = [NameParser.NORMAL_REGEX]
+    else: # this will be chosen if no show is given so in cache-,rss-,pp search
+        modeList = [NameParser.ANIME_REGEX,NameParser.NORMAL_REGEX]    
+        
+    for mode in modeList:
+        try:
+            myParser = NameParser(regexMode=mode)                
+            parse_result = myParser.parse(toParse)
+        except InvalidNameException:
+            pass
+        else:
+            if mode == NameParser.ANIME_REGEX and not (show and show.is_anime):
+                tvdbid = get_tvdbid(parse_result.series_name, showList, tvdbActiveLookUp)
+                if not tvdbid or not check_for_anime(tvdbid,showList): # if we didnt get an tvdbid or the show is not an anime (in our db) we will chose the next regex mode
+                    continue
+                else: # this means it was an anime
+                    break
+            break
+    else:
+        raise InvalidNameException("Unable to parse "+toParse)
+    return parse_result
+
+
+def _check_against_names(name, show):
+    nameInQuestion = full_sanitizeSceneName(name)
+
+    showNames = [show.name]
+    showNames.extend(sickbeard.scene_exceptions.get_scene_exceptions(show.tvdbid))
+
+    for showName in showNames:
+        nameFromList = full_sanitizeSceneName(showName)
+        # i'll leave this here for historical resons but i changed the find() into a "==" which resolves this problem
+        # FIXME: this is ok for most shows but will give false positives on:
+        """nameFromList = "show name: special version"
+           nameInQuestion = "show name"
+           ->will match
+
+           but the otherway around:
+
+           nameFromList = "show name"
+           nameInQuestion = "show name: special version"
+           ->will not work
+
+           athough the first example will only occur during pp
+           and the second example is good that it wont match
+
+        """
+        """
+        regex = "^."+ ".*"
+        match = re.match(regex, curName)
+        
+        if not match:
+            singleName = False
+            break
+        """
+        
+        #logger.log(u"Comparing names: '"+nameFromList+"' vs '"+nameInQuestion+"'", logger.DEBUG)
+        if nameFromList == nameInQuestion:
+            return True
+
+    return False
+
+
+def get_tvdbid(name, showList, useTvdb=False):
+    logger.log(u"Trying to get the tvdbid for "+name, logger.DEBUG)
+            
+    for show in showList:
+        if _check_against_names(name, show):
+            logger.log(u"Matched "+name+" in the showlist to the show "+show.name, logger.DEBUG)
+            return show.tvdbid
+
+    if useTvdb:
+        try:
+            t = tvdb_api.Tvdb(custom_ui=classes.ShowListUI, **sickbeard.TVDB_API_PARMS)
+            showObj = t[name]
+        except (tvdb_exceptions.tvdb_exception):
+            # if none found, search on all languages
+            try:
+                # There's gotta be a better way of doing this but we don't wanna
+                # change the language value elsewhere
+                ltvdb_api_parms = sickbeard.TVDB_API_PARMS.copy()
+    
+                ltvdb_api_parms['search_all_languages'] = True
+                t = tvdb_api.Tvdb(custom_ui=classes.ShowListUI, **ltvdb_api_parms)
+                showObj = t[name]
+            except (tvdb_exceptions.tvdb_exception, IOError):
+                pass
+    
+            return 0
+        except (IOError):
+            return 0
+        else:
+            return int(showObj["id"])
+            
+    return 0 
+    
+ 
+def check_for_anime(tvdb_id,showList=[],forceDB=False):
+    """
+    Check if the show is a anime
+    """
+    if not forceDB and len(showList):
+        for show in showList:
+            if show.tvdbid == tvdb_id and show.is_anime:
+                return True
+    
+    
+    elif tvdb_id:
+        myDB = db.DBConnection()
+        isAbsoluteNumberSQlResult = myDB.select("SELECT anime,show_name FROM tv_shows WHERE tvdb_id = ?", [tvdb_id])
+        if isAbsoluteNumberSQlResult and int(isAbsoluteNumberSQlResult[0][0]) > 0:
+            logger.log(u"This show (tvdbid:"+str(tvdb_id)+") is flaged as an anime", logger.DEBUG)
+            return True
+    return False 
+
+def set_up_anidb_connection():
+        if not sickbeard.USE_ANIDB:
+            logger.log(u"Usage of anidb disabled. Skiping", logger.DEBUG)
+            return False
+        
+        if not sickbeard.ANIDB_USERNAME and not sickbeard.ANIDB_PASSWORD:
+            logger.log(u"anidb username and/or password are not set. Aborting anidb lookup.", logger.DEBUG)
+            return False
+        
+        if not sickbeard.ADBA_CONNECTION:
+            anidb_logger = lambda x : logger.log("ANIDB: "+str(x), logger.DEBUG)
+            sickbeard.ADBA_CONNECTION = adba.Connection(keepAlive=True,log=anidb_logger)
+        
+        if not sickbeard.ADBA_CONNECTION.authed():
+            try:
+                sickbeard.ADBA_CONNECTION.auth(sickbeard.ANIDB_USERNAME, sickbeard.ANIDB_PASSWORD)
+            except Exception,e :
+                logger.log(u"exception msg: "+str(e))
+                return False
+        else:
+            return True
+ 
+        return sickbeard.ADBA_CONNECTION.authed()
+
+   
+def full_sanitizeSceneName(name):
+    return re.sub('[. -]', ' ', sanitizeSceneName(name)).lower().lstrip()
+
 
 def sanitizeSceneName (name, ezrss=False):
     """

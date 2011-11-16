@@ -19,13 +19,15 @@
 import sickbeard
 
 from sickbeard.common import countryList
-from sickbeard.helpers import sanitizeSceneName
+from sickbeard.helpers import sanitizeSceneName, parse_result_wrapper
 from sickbeard.scene_exceptions import get_scene_exceptions
 from sickbeard import logger
 from sickbeard import db
+from sickbeard.blackandwhitelist import *
 
 import re
 import datetime
+import common
 
 from name_parser.parser import NameParser, InvalidNameException
 
@@ -44,8 +46,7 @@ def filterBadReleases(name):
     """
 
     try:
-        fp = NameParser()
-        parse_result = fp.parse(name)
+        parse_result = parse_result_wrapper(None,name)
     except InvalidNameException:
         logger.log(u"Unable to parse the filename "+name+" into a valid episode", logger.WARNING)
         return False
@@ -98,7 +99,7 @@ def sceneToNormalShowNames(name):
         results.append(re.sub('(\D)(\d{4})$', '\\1(\\2)', cur_name))
     
         # add brackets around the country
-        country_match_str = '|'.join(countryList.values())
+        country_match_str = '|'.join(common.countryList.values())
         results.append(re.sub('(?i)([. _-])('+country_match_str+')$', '\\1(\\2)', cur_name))
 
     results += name_list
@@ -122,7 +123,34 @@ def makeSceneSeasonSearchString (show, segment, extraSearchType=None):
         
         # the search string for air by date shows is just 
         seasonStrings = [segment]
-    
+    elif show.is_anime:
+        """this part is from darkcube"""
+        numseasons = 0
+        episodeNumbersSQLResult = myDB.select("SELECT absolute_number, status FROM tv_episodes WHERE showid = ? and season = ?", [show.tvdbid, segment])
+        
+        # get show qualities
+        anyQualities, bestQualities = common.Quality.splitQuality(show.quality)
+        
+        # compile a list of all the episode numbers we need in this 'season'
+        seasonStrings = []
+        for episodeNumberResult in episodeNumbersSQLResult:
+            
+            # get quality of the episode
+            curCompositeStatus = int(episodeNumberResult["status"])
+            curStatus, curQuality = common.Quality.splitCompositeStatus(curCompositeStatus)
+            
+            if bestQualities:
+                highestBestQuality = max(bestQualities)
+            else:
+                highestBestQuality = 0
+        
+            # if we need a better one then add it to the list of episodes to fetch
+            if (curStatus in (common.DOWNLOADED, common.SNATCHED) and curQuality < highestBestQuality) or curStatus == common.WANTED:
+                try:
+                    if int(episodeNumberResult["absolute_number"]) > 0:
+                        seasonStrings.append("%d" % int(episodeNumberResult["absolute_number"]))
+                except:
+                    pass
     else:
         numseasonsSQlResult = myDB.select("SELECT COUNT(DISTINCT season) as numseasons FROM tv_episodes WHERE showid = ? and season != 0", [show.tvdbid])
         numseasons = int(numseasonsSQlResult[0][0])
@@ -154,13 +182,17 @@ def makeSceneSeasonSearchString (show, segment, extraSearchType=None):
             if numseasons == 1:
                 toReturn.append('"'+curShow+'"')
             elif numseasons == 0:
-                toReturn.append('"'+curShow+' '+str(segment).replace('-',' ')+'"')
+                if show.is_anime:
+                    term_list = ['(+"'+curShow+'"+"'+x+'")' for x in seasonStrings]
+                    toReturn.append('.'.join(term_list))
+                else:
+                    toReturn.append('"'+curShow+' '+str(segment).replace('-',' ')+'"')
             else:
                 term_list = [x+'*' for x in seasonStrings]
                 if show.air_by_date:
                     term_list = ['"'+x+'"' for x in term_list]
 
-                toReturn.append('"'+curShow+'"')
+                toReturn.append('+"'+curShow+'" +('+','.join(term_list)+')')
     
     if extraSearchType == "nzbmatrix":     
         toReturn = ['+('+','.join(toReturn)+')']
@@ -174,25 +206,31 @@ def makeSceneSearchString (episode):
     myDB = db.DBConnection()
     numseasonsSQlResult = myDB.select("SELECT COUNT(DISTINCT season) as numseasons FROM tv_episodes WHERE showid = ? and season != 0", [episode.show.tvdbid])
     numseasons = int(numseasonsSQlResult[0][0])
-
+    
     # see if we should use dates instead of episodes
     if episode.show.air_by_date and episode.airdate != datetime.date.fromordinal(1):
         epStrings = [str(episode.airdate)]
+    elif episode.show.is_anime:
+        epStrings = ["%i" % int(episode.absolute_number)]
     else:
         epStrings = ["S%02iE%02i" % (int(episode.season), int(episode.episode)),
                     "%ix%02i" % (int(episode.season), int(episode.episode))]
 
     # for single-season shows just search for the show name
-    if numseasons == 1:
+    if numseasons == 1 and not episode.show.is_anime:
         epStrings = ['']
 
+    bwl = BlackAndWhiteList(episode.show.tvdbid)
     showNames = set(makeSceneShowSearchStrings(episode.show))
 
     toReturn = []
-
     for curShow in showNames:
         for curEpString in epStrings:
-            toReturn.append(curShow + '.' + curEpString)
+            if len(bwl.whiteList) > 0:
+                for keyword in bwl.whiteList:
+                    toReturn.append(keyword + '.' + curShow + '.' + curEpString)
+            else:
+                toReturn.append(curShow + '.' + curEpString)
 
     return toReturn
 
@@ -205,8 +243,14 @@ def isGoodResult(name, show, log=True):
     showNames = map(sanitizeSceneName, all_show_names) + all_show_names
 
     for curName in set(showNames):
-        escaped_name = re.sub('\\\\[\\s.-]', '\W+', re.escape(curName))
-        curRegex = '^' + escaped_name + '\W+(?:(?:S\d[\dE._ -])|(?:\d\d?x)|(?:\d{4}\W\d\d\W\d\d)|(?:(?:part|pt)[\._ -]?(\d|[ivx]))|Season\W+\d+\W+|E\d+\W+)'
+        if not show.is_anime:
+            escaped_name = re.sub('\\\\[\\s.-]', '\W+', re.escape(curName))
+            curRegex = '^' + escaped_name + '\W+(?:(?:S\d[\dE._ -])|(?:\d\d?x)|(?:\d{4}\W\d\d\W\d\d)|(?:(?:part|pt)[\._ -]?(\d|[ivx]))|Season\W+\d+\W+|E\d+\W+)'
+        else:
+            escaped_name = re.sub('\\\\[\\s.-]', '[\W_]+', re.escape(curName))
+            # FIXME: find a "automatically-created" regex for anime releases # test at http://regexr.com?2uon3
+            curRegex = '^(\[.*?\])?[ _.]*' + escaped_name + '(([ _.]*-)|([ ._-]+\d+)|([ ._-]+OVA)|([ ._-]+s\d{2})).*'
+
         if log:
             logger.log(u"Checking if show "+name+" matches " + curRegex, logger.DEBUG)
 

@@ -19,7 +19,6 @@
 import os.path
 import operator, platform
 import re
-
 from sickbeard import version
 
 USER_AGENT = 'Sick Beard/alpha2-'+version.SICKBEARD_VERSION.replace(' ','-')+' ('+platform.system()+' '+platform.release()+')'
@@ -28,6 +27,7 @@ mediaExtensions = ['avi', 'mkv', 'mpg', 'mpeg', 'wmv',
                    'ogm', 'mp4', 'iso', 'img', 'divx',
                    'm2ts', 'm4v', 'ts', 'flv', 'f4v',
                    'mov', 'rmvb', 'vob', 'dvr-ms', 'wtv',
+                   'asf'
                    ]
 
 ### Other constants
@@ -108,7 +108,7 @@ class Quality:
         return (anyQualities, bestQualities)
 
     @staticmethod
-    def nameQuality(name):
+    def nameQuality(name, anime=False):
 
         name = os.path.basename(name)
 
@@ -122,8 +122,15 @@ class Quality:
             if regex_match:
                 return x
 
-        checkName = lambda list, func: func([re.search(x, name, re.I) for x in list])
+        if not anime:
+            return Quality.nameQualityNormal(name)
+        else:
+            return Quality.nameQualityAnime(name)
 
+    @staticmethod
+    def nameQualityNormal(name):
+        checkName = lambda list, func: func([re.search(x, name, re.I) for x in list])
+        
         if checkName(["pdtv.xvid", "hdtv.xvid", "dsr.xvid"], any) and not checkName(["720p"], all):
             return Quality.SDTV
         elif checkName(["dvdrip.xvid", "bdrip.xvid", "dvdrip.divx", "dvdrip.ws.xvid"], any) and not checkName(["720p"], all):
@@ -138,6 +145,29 @@ class Quality:
             return Quality.FULLHDBLURAY
         else:
             return Quality.UNKNOWN
+        
+    @staticmethod
+    def nameQualityAnime(name):
+        checkName = lambda list, func: func([re.search(x, name, re.I) for x in list])
+        
+        
+        blueRayOptions = checkName(["bluray","blu-ray"],any)
+        hdOptions = checkName(["720p","1280x720"], any)
+
+        if checkName(["360p","XviD"], any):
+            return Quality.SDTV
+        elif checkName(["dvd","480p","848x480"], any):
+            return Quality.SDDVD
+        elif hdOptions and not blueRayOptions:
+            return Quality.HDTV
+        elif hdOptions and not blueRayOptions:
+            return Quality.HDWEBDL
+        elif blueRayOptions and hdOptions:
+            return Quality.HDBLURAY
+        elif blueRayOptions and checkName(["1080p", "1920x1080"],any):
+            return Quality.FULLHDBLURAY
+        else:
+            return Quality.assumeQuality(name)
 
     @staticmethod
     def assumeQuality(name):

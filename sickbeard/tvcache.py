@@ -35,6 +35,7 @@ import xml.etree.cElementTree as etree
 from lib.tvdb_api import tvdb_api, tvdb_exceptions
 
 from name_parser.parser import NameParser, InvalidNameException
+from sickbeard.helpers import parse_result_wrapper
 
 
 class CacheDBConnection(db.DBConnection):
@@ -44,7 +45,7 @@ class CacheDBConnection(db.DBConnection):
 
         # Create the table if it's not already there
         try:
-            sql = "CREATE TABLE "+providerName+" (name TEXT, season NUMERIC, episodes TEXT, tvrid NUMERIC, tvdbid NUMERIC, url TEXT, time NUMERIC, quality TEXT);"
+            sql = "CREATE TABLE "+providerName+" (name TEXT, season NUMERIC, episodes TEXT, tvrid NUMERIC, tvdbid NUMERIC, url TEXT, time NUMERIC, quality TEXT, release_group TEXT);"
             self.connection.execute(sql)
             self.connection.commit()
         except sqlite3.OperationalError, e:
@@ -129,13 +130,18 @@ class TVCache():
     def _translateLinkURL(self, url):
         return url.replace('&amp;','&')
 
-    def _parseItem(self, item):
 
+    def _parseItem(self, item):
+        """Return None
+        parse a single rss feed item and add its info to the chache
+        will check for needed infos
+        """
         title = item.findtext('title')
         url = item.findtext('link')
 
         self._checkItemAuth(title, url)
 
+        # we at least need a title and url, if one is missing stop
         if not title or not url:
             logger.log(u"The XML returned from the "+self.provider.name+" feed is incomplete, this result is unusable", logger.ERROR)
             return
@@ -178,18 +184,30 @@ class TVCache():
         return True
 
     def _addCacheEntry(self, name, url, season=None, episodes=None, tvdb_id=0, tvrage_id=0, quality=None, extraNames=[]):
-
+        """Return False|None
+        Parse the name and try to get as much info out of it as we can
+        Will use anime regex's if this is called from fanzub
+        On a succesfull parse it will add the parsed infos into the cache.db
+        This dosen't mean the parsed result is usefull
+        """
         myDB = self._getDB()
 
         parse_result = None
-
+        tvdb_lang = None
+        
         # if we don't have complete info then parse the filename to get it
         for curName in [name] + extraNames:
             try:
-                myParser = NameParser()
+                """
+                if self.provider.supportsAbsoluteNumbering:                
+                    myParser = NameParser(regexMode=NameParser.ALL_REGEX)
+                else:
+                    myParser = NameParser(regexMode=NameParser.NORMAL_REGEX)
                 parse_result = myParser.parse(curName)
+                """
+                parse_result = parse_result_wrapper(None,curName)
             except InvalidNameException:
-                logger.log(u"Unable to parse the filename "+curName+" into a valid episode", logger.DEBUG)
+                logger.log(u"tvcache: Unable to parse the filename "+curName+" into a valid episode", logger.DEBUG)
                 continue
 
         if not parse_result:
@@ -203,6 +221,7 @@ class TVCache():
         tvdb_lang = None
 
         # if we need tvdb_id or tvrage_id then search the DB for them
+        # if this is called from the a generic provider none of this will be present
         if not tvdb_id or not tvrage_id:
 
             # if we have only the tvdb_id, use the database
@@ -227,7 +246,7 @@ class TVCache():
 
             # if they're both empty then fill out as much info as possible by searching the show name
             else:
-
+                
                 # check the name cache and see if we already know what show this is
                 logger.log(u"Checking the cache to see if we already know the tvdb id of "+parse_result.series_name, logger.DEBUG)
                 tvdb_id = name_cache.retrieveNameFromCache(parse_result.series_name)
@@ -300,16 +319,32 @@ class TVCache():
                 logger.log(u"Unable to contact TVDB: "+ex(e), logger.WARNING)
                 return False
 
+        if parse_result.is_anime and len(parse_result.ab_episode_numbers) >= 1 and tvdb_id:
+            # look it up
+            curShow = helpers.findCertainShow(sickbeard.showList, tvdb_id)
+            if curShow.is_anime  and len(parse_result.ab_episode_numbers) > 0:
+                try:
+                    (season, episodes) = helpers.get_all_episodes_from_absolute_number(curShow, None, parse_result.ab_episode_numbers)
+                except exceptions.EpisodeNotFoundByAbsoluteNumerException:
+                    logger.log(str(tvdb_id) + ": DB objekt with absolute number " + str(parse_result.ab_episode_numbers) + " was not found, TheTvDB lacking behind?")
+                    return False 
+            else:
+                logger.log(u""+str(name)+" was matched to the show "+str(curShow.name)+" as an anime but the show is not marked as an anime", logger.WARNING)
+
         episodeText = "|"+"|".join(map(str, episodes))+"|"
 
         # get the current timestamp
         curTimestamp = int(time.mktime(datetime.datetime.today().timetuple()))
 
         if not quality:
-            quality = Quality.nameQuality(name)
+            quality = Quality.nameQuality(name, parse_result.is_anime)
 
-        myDB.action("INSERT INTO "+self.providerID+" (name, season, episodes, tvrid, tvdbid, url, time, quality) VALUES (?,?,?,?,?,?,?,?)",
-                    [name, season, episodeText, tvrage_id, tvdb_id, url, curTimestamp, quality])
+        release_group = parse_result.release_group
+        if not release_group:
+            release_group = "";
+
+        myDB.action("INSERT INTO "+self.providerID+" (name, season, episodes, tvrid, tvdbid, url, time, quality, release_group) VALUES (?,?,?,?,?,?,?,?,?)",
+                    [name, season, episodeText, tvrage_id, tvdb_id, url, curTimestamp, quality, release_group])
 
 
     def searchCache(self, episode, manualSearch=False):
@@ -384,6 +419,7 @@ class TVCache():
                 result.url = url
                 result.name = title
                 result.quality = curQuality
+                result.release_group = curResult["release_group"]
 
                 # add it to the list
                 if epObj not in neededEps:

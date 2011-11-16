@@ -20,9 +20,11 @@ import re
 import urllib
 
 from sickbeard.helpers import sanitizeSceneName
-from sickbeard import name_cache
+from sickbeard import name_cache, helpers
 from sickbeard import logger
 from sickbeard import db
+import sickbeard
+from lib import adba
 
 def get_scene_exceptions(tvdb_id):
     """
@@ -31,7 +33,9 @@ def get_scene_exceptions(tvdb_id):
 
     myDB = db.DBConnection("cache.db")
     exceptions = myDB.select("SELECT show_name FROM scene_exceptions WHERE tvdb_id = ?", [tvdb_id])
-    return [cur_exception["show_name"] for cur_exception in exceptions]
+    exceptionsList = [cur_exception["show_name"] for cur_exception in exceptions]
+
+    return exceptionsList
 
 def get_scene_exception_by_name(show_name):
     """
@@ -40,7 +44,7 @@ def get_scene_exception_by_name(show_name):
     """
 
     myDB = db.DBConnection("cache.db")
-    
+
     # try the obvious case first
     exception_result = myDB.select("SELECT tvdb_id FROM scene_exceptions WHERE LOWER(show_name) = ?", [show_name.lower()])
     if exception_result:
@@ -52,37 +56,26 @@ def get_scene_exception_by_name(show_name):
         cur_exception_name = cur_exception["show_name"]
         cur_tvdb_id = int(cur_exception["tvdb_id"])
 
-        if show_name.lower() in (cur_exception_name.lower(), sanitizeSceneName(cur_exception_name).lower().replace('.',' ')):
-            logger.log(u"Scene exception lookup got tvdb id "+str(cur_tvdb_id)+u", using that", logger.DEBUG)
+        if show_name.lower() in (cur_exception_name.lower(), sanitizeSceneName(cur_exception_name).lower().replace('.', ' ')):
+            logger.log(u"Scene exception lookup got tvdb id " + str(cur_tvdb_id) + u", using that", logger.DEBUG)
             return cur_tvdb_id
 
     return None
 
-def retrieve_exceptions():
+def retrieve_exceptions(localOnly=False):
     """
     Looks up the exceptions on github, parses them into a dict, and inserts them into the
     scene_exceptions table in cache.db. Also clears the scene name cache.
     """
 
-    exception_dict = {}
-
     # exceptions are stored on github pages
     url = 'http://midgetspy.github.com/sb_tvdb_scene_exceptions/exceptions.txt'
-    open_url = urllib.urlopen(url)
-    
-    # each exception is on one line with the format tvdb_id: 'show name 1', 'show name 2', etc
-    for cur_line in open_url.readlines():
-        tvdb_id, sep, aliases = cur_line.partition(':') #@UnusedVariable
-        
-        if not aliases:
-            continue
-    
-        tvdb_id = int(tvdb_id)
-        
-        # regex out the list of shows, taking \' into account
-        alias_list = [re.sub(r'\\(.)', r'\1', x) for x in re.findall(r"'(.*?)(?<!\\)',?", aliases)]
-        
-        exception_dict[tvdb_id] = alias_list
+    url2 = 'http://lad1337.github.com/sb_tvdb_scene_exceptions/anime_exceptions.txt'
+    exception_dict = {}
+    if not localOnly:
+        exception_dict = _retrieve_exceptions_fetcher(url)
+        exception_dict.update(_retrieve_exceptions_fetcher(url2)) # server anime exceptions
+    exception_dict.update(_retrieve_anidb_mainnames()) # anidb xml anime exceptions
 
     myDB = db.DBConnection("cache.db")
 
@@ -93,7 +86,7 @@ def retrieve_exceptions():
 
         # get a list of the existing exceptions for this ID
         existing_exceptions = [x["show_name"] for x in myDB.select("SELECT * FROM scene_exceptions WHERE tvdb_id = ?", [cur_tvdb_id])]
-        
+
         for cur_exception in exception_dict[cur_tvdb_id]:
             # if this exception isn't already in the DB then add it
             if cur_exception not in existing_exceptions:
@@ -103,3 +96,42 @@ def retrieve_exceptions():
     # since this could invalidate the results of the cache we clear it out after updating
     if changed_exceptions:
         name_cache.clearCache()
+
+def _retrieve_exceptions_fetcher(url):
+
+    exception_dict = {}
+    open_url = urllib.urlopen(url)
+
+    # each exception is on one line with the format tvdb_id: 'show name 1', 'show name 2', etc
+    for cur_line in open_url.readlines():
+        tvdb_id, sep, aliases = cur_line.partition(':') #@UnusedVariable
+
+        if not aliases:
+            continue
+
+        tvdb_id = int(tvdb_id)
+
+        # regex out the list of shows, taking \' into account
+        alias_list = [re.sub(r'\\(.)', r'\1', x) for x in re.findall(r"'(.*?)(?<!\\)',?", aliases)]
+
+        exception_dict[tvdb_id] = alias_list
+    return exception_dict
+
+
+def _retrieve_anidb_mainnames():
+
+    anidb_mainNames = {}
+    for show in sickbeard.showList:
+        if show.is_anime:
+            try:
+                anime = adba.Anime(None, name=show.name, tvdbid=show.tvdbid, autoCorrectName=True)
+            except:
+                continue
+            else:
+                if anime.name and anime.name != show.name:
+                    anidb_mainNames[show.tvdbid] = [anime.name]
+
+    logger.log("anidb anime names: " + str(anidb_mainNames), logger.DEBUG)
+    return anidb_mainNames
+
+

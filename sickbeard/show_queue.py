@@ -30,6 +30,7 @@ from sickbeard.tv import TVShow
 from sickbeard import exceptions, logger, ui, db
 from sickbeard import generic_queue
 from sickbeard import name_cache
+from sickbeard import scene_exceptions
 from sickbeard.exceptions import ex
 
 class ShowQueue(generic_queue.GenericQueue):
@@ -115,8 +116,8 @@ class ShowQueue(generic_queue.GenericQueue):
 
         return queueItemObj
 
-    def addShow(self, tvdb_id, showDir, default_status=None, quality=None, season_folders=None, lang="en"):
-        queueItemObj = QueueItemAdd(tvdb_id, showDir, default_status, quality, season_folders, lang)
+    def addShow(self, tvdb_id, showDir, default_status=None, quality=None, season_folders=None, lang="en", anime=0):
+        queueItemObj = QueueItemAdd(tvdb_id, showDir, default_status, quality, season_folders, lang, anime)
         
         self.add_item(queueItemObj)
 
@@ -165,7 +166,7 @@ class ShowQueueItem(generic_queue.QueueItem):
 
 
 class QueueItemAdd(ShowQueueItem):
-    def __init__(self, tvdb_id, showDir, default_status, quality, season_folders, lang):
+    def __init__(self, tvdb_id, showDir, default_status, quality, season_folders, lang, anime):
 
         self.tvdb_id = tvdb_id
         self.showDir = showDir
@@ -173,6 +174,7 @@ class QueueItemAdd(ShowQueueItem):
         self.quality = quality
         self.season_folders = season_folders
         self.lang = lang
+        self.anime = anime
 
         self.show = None
 
@@ -243,6 +245,7 @@ class QueueItemAdd(ShowQueueItem):
             self.show.location = self.showDir
             self.show.quality = self.quality if self.quality else sickbeard.QUALITY_DEFAULT
             self.show.seasonfolders = self.season_folders if self.season_folders != None else sickbeard.SEASON_FOLDERS_DEFAULT
+            self.show.anime = self.anime if self.anime != None else sickbeard.ANIME_DEFAULT
             self.show.paused = False
             
             # be smartish about this
@@ -272,13 +275,7 @@ class QueueItemAdd(ShowQueueItem):
 
         # add it to the show list
         sickbeard.showList.append(self.show)
-
-        try:
-            self.show.loadEpisodesFromDir()
-        except Exception, e:
-            logger.log(u"Error searching dir for episodes: " + ex(e), logger.ERROR)
-            logger.log(traceback.format_exc(), logger.DEBUG)
-
+        
         try:
             self.show.loadEpisodesFromTVDB()
             self.show.setTVRID()
@@ -288,6 +285,12 @@ class QueueItemAdd(ShowQueueItem):
             
         except Exception, e:
             logger.log(u"Error with TVDB, not creating episode list: " + ex(e), logger.ERROR)
+            logger.log(traceback.format_exc(), logger.DEBUG)
+
+        try:
+            self.show.loadEpisodesFromDir()
+        except Exception, e:
+            logger.log(u"Error searching dir for episodes: " + ex(e), logger.ERROR)
             logger.log(traceback.format_exc(), logger.DEBUG)
 
         try:
@@ -301,6 +304,10 @@ class QueueItemAdd(ShowQueueItem):
             logger.log(u"Setting all episodes to the specified default status: "+str(self.default_status))
             myDB = db.DBConnection();
             myDB.action("UPDATE tv_episodes SET status = ? WHERE status = ? AND showid = ? AND season != 0", [self.default_status, SKIPPED, self.show.tvdbid])
+
+        # before we run the backlog lets update the local aliases if the new show is an anime
+        if self.show.is_anime:
+            scene_exceptions.retrieve_exceptions(localOnly=True)
 
         # if they started with WANTED eps then run the backlog
         if self.default_status == WANTED:

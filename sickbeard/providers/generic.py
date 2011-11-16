@@ -26,7 +26,7 @@ import urllib2
 
 import sickbeard
 
-from sickbeard import helpers, classes, logger, db
+from sickbeard import helpers, classes, logger, db, exceptions
 
 from sickbeard.common import Quality, MULTI_EP_RESULT, SEASON_RESULT
 from sickbeard import tvcache
@@ -35,7 +35,8 @@ from sickbeard.exceptions import ex
 
 from lib.hachoir_parser import createParser
 
-from sickbeard.name_parser.parser import NameParser, InvalidNameException
+from sickbeard.name_parser.parser import InvalidNameException
+from sickbeard.helpers import parse_result_wrapper
 
 class GenericProvider:
 
@@ -50,6 +51,7 @@ class GenericProvider:
         self.url = ''
 
         self.supportsBacklog = False
+        self.supportsAbsoluteNumbering = False
 
         self.cache = tvcache.TVCache(self)
 
@@ -115,7 +117,10 @@ class GenericProvider:
             return None
 
         return result
-
+    
+    def get_episode_search_strings(self,ep_obj):
+        return self._get_episode_search_strings(ep_obj)
+    
     def downloadResult(self, result):
         """
         Save the result to disk.
@@ -179,12 +184,17 @@ class GenericProvider:
         self.cache.updateCache()
         return self.cache.findNeededEpisodes()
 
-    def getQuality(self, item):
-        title = item.findtext('title')
-        quality = Quality.nameQuality(title)
+    def getQuality(self, item, anime=False):
+        title = item.findtext('title').replace("/"," ")
+        """we are here in the search provider it is ok to delete the /.
+        i am doing this because some show get posted with a / in the name
+        and during qulaity check it is reduced to the base name
+        """
+        logger.log(u"geting quality for:" + title+ " anime: "+str(anime),logger.DEBUG)
+        quality = Quality.nameQuality(title, anime)
         return quality
-
-    def _doSearch(self):
+    
+    def _doSearch(self, show=None):
         return []
 
     def _get_season_search_strings(self, show, season, episode=None):
@@ -201,11 +211,13 @@ class GenericProvider:
         
         return (title, url)
     
-    def findEpisode (self, episode, manualSearch=False):
+    def findEpisode (self, episode, manualSearch=False, searchString=None):
 
         self._checkAuth()
-
-        logger.log(u"Searching "+self.name+" for " + episode.prettyName(True))
+        if searchString:
+            logger.log(u"Searching "+self.name+" for '" +str(searchString)+"'")
+        else:
+            logger.log(u"Searching "+self.name+" for episode " + episode.prettyName(True))
 
         self.cache.updateCache()
         results = self.cache.searchCache(episode, manualSearch)
@@ -217,32 +229,40 @@ class GenericProvider:
         if results or not manualSearch:
             return results
 
-        itemList = []
+        if searchString: # if we already got a searchstring don't bother make one
+            search_strings = [searchString]
+        else:
+            search_strings = self._get_episode_search_strings(episode)
 
-        for cur_search_string in self._get_episode_search_strings(episode):
+        itemList = []
+        for cur_search_string in search_strings:
             itemList += self._doSearch(cur_search_string, show=episode.show)
+
 
         for item in itemList:
 
             (title, url) = self._get_title_and_url(item)
-
+            
             # parse the file name
             try:
-                myParser = NameParser()
-                parse_result = myParser.parse(title)
+                parse_result = parse_result_wrapper(episode.show,title)
             except InvalidNameException:
-                logger.log(u"Unable to parse the filename "+title+" into a valid episode", logger.WARNING)
+                logger.log(u"generic1: Unable to parse the filename "+title+" into a valid episode", logger.DEBUG)
                 continue
-
+                    
             if episode.show.air_by_date:
                 if parse_result.air_date != episode.airdate:
                     logger.log("Episode "+title+" didn't air on "+str(episode.airdate)+", skipping it", logger.DEBUG)
+                    continue
+            elif episode.show.is_anime:
+                if episode.absolute_number not in parse_result.ab_episode_numbers:
+                    logger.log("Episode "+title+" isn't "+str(episode.absolute_number)+", skipping it. episode numbers:"+ str(parse_result.ab_episode_numbers), logger.DEBUG)
                     continue
             elif parse_result.season_number != episode.season or episode.episode not in parse_result.episode_numbers:
                 logger.log("Episode "+title+" isn't "+str(episode.season)+"x"+str(episode.episode)+", skipping it", logger.DEBUG)
                 continue
 
-            quality = self.getQuality(item)
+            quality = self.getQuality(item,anime=episode.show.is_anime)
 
             if not episode.show.wantEpisode(episode.season, episode.episode, quality, manualSearch):
                 logger.log(u"Ignoring result "+title+" because we don't want an episode that is "+Quality.qualityStrings[quality], logger.DEBUG)
@@ -254,6 +274,7 @@ class GenericProvider:
             result.url = url
             result.name = title
             result.quality = quality
+            result.release_group = parse_result.release_group
 
             results.append(result)
 
@@ -267,23 +288,29 @@ class GenericProvider:
         results = {}
 
         for curString in self._get_season_search_strings(show, season):
-            itemList += self._doSearch(curString)
+            itemList += self._doSearch(curString, show=show)
 
         for item in itemList:
 
             (title, url) = self._get_title_and_url(item)
 
-            quality = self.getQuality(item)
+            quality = self.getQuality(item, show.is_anime)
 
             # parse the file name
             try:
-                myParser = NameParser(False)
-                parse_result = myParser.parse(title)
+                parse_result = parse_result_wrapper(show,title)
             except InvalidNameException:
-                logger.log(u"Unable to parse the filename "+title+" into a valid episode", logger.WARNING)
+                logger.log(u"generic2: Unable to parse the filename "+title+" into a valid episode", logger.DEBUG)
                 continue
 
-            if not show.air_by_date:
+            if show.is_anime and len(parse_result.ab_episode_numbers) > 0:
+                try:
+                    (actual_season, actual_episodes) = helpers.get_all_episodes_from_absolute_number(show, None, parse_result.ab_episode_numbers)
+                except exceptions.EpisodeNotFoundByAbsoluteNumerException:
+                    logger.log(str(show.tvdbid) + ": DB objekt with absolute number " + str(parse_result.ab_episode_numbers) + " was not found, TheTvDB lacking behind?")
+                    continue    
+                
+            elif not show.air_by_date:
                 # this check is meaningless for non-season searches
                 if (parse_result.season_number != None and parse_result.season_number != season) or (parse_result.season_number == None and season != 1):
                     logger.log(u"The result "+title+" doesn't seem to be a valid episode for season "+str(season)+", ignoring")
@@ -307,7 +334,10 @@ class GenericProvider:
                 
                 actual_season = int(sql_results[0]["season"])
                 actual_episodes = [int(sql_results[0]["episode"])]
-
+            
+            
+                
+            
             # make sure we want the episode
             wantEp = True
             for epNo in actual_episodes:
@@ -330,6 +360,7 @@ class GenericProvider:
             result.url = url
             result.name = title
             result.quality = quality
+            result.release_group = parse_result.release_group
 
             if len(epObj) == 1:
                 epNum = epObj[0].episode

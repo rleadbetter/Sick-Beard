@@ -30,7 +30,7 @@ from threading import Lock
 
 # apparently py2exe won't build these unless they're imported somewhere
 from sickbeard import providers, metadata
-from providers import ezrss, tvtorrents, btjunkie, kat, thepiratebay, nzbs_org, nzbmatrix, nzbsrus, newznab, womble, newzbin
+from providers import ezrss, tvtorrents, btjunkie, kat, thepiratebay, nzbs_org, nzbmatrix, nzbsrus, newznab, womble, newzbin, fanzub
 
 from sickbeard import searchCurrent, searchBacklog, showUpdater, versionChecker, properFinder, autoPostProcesser
 from sickbeard import helpers, db, exceptions, show_queue, search_queue, scheduler
@@ -113,6 +113,7 @@ QUALITY_DEFAULT = None
 STATUS_DEFAULT = None
 SEASON_FOLDERS_FORMAT = None
 SEASON_FOLDERS_DEFAULT = None
+ANIME_DEFAULT = None
 PROVIDER_ORDER = []
 
 NAMING_SHOW_NAME = None
@@ -123,6 +124,7 @@ NAMING_SEP_TYPE = None
 NAMING_USE_PERIODS = None
 NAMING_QUALITY = None
 NAMING_DATES = None
+NAMING_ANIME = None
 
 TVDB_API_KEY = '9DAF49C96CBF8DAC'
 TVDB_BASE_URL = None
@@ -180,6 +182,8 @@ NZBMATRIX_APIKEY = None
 NEWZBIN = False
 NEWZBIN_USERNAME = None
 NEWZBIN_PASSWORD = None
+
+FANZUB = False
 
 SAB_USERNAME = None
 SAB_PASSWORD = None
@@ -243,6 +247,14 @@ USE_NMJ = False
 NMJ_HOST = None
 NMJ_DATABASE = None
 NMJ_MOUNT = None
+
+ANIMESUPPORT = False
+USE_ANIDB = False
+ANIDB_USERNAME = None
+ANIDB_PASSWORD = None
+ANIDB_USE_MYLIST = 0
+ADBA_CONNECTION = None
+ANIME_SPLIT_HOME = False
 
 USE_SYNOINDEX = False
 
@@ -356,7 +368,7 @@ def initialize(consoleLogging=True):
                 showUpdateScheduler, __INITIALIZED__, LAUNCH_BROWSER, showList, loadingShowList, \
                 NZBS, NZBS_UID, NZBS_HASH, EZRSS, BTJUNKIE, BTJUNKIE_MINIMUM_SEEDS, KAT, KAT_MINIMUM_SEEDS, THEPIRATEBAY, THEPIRATEBAY_TRUSTED, THEPIRATEBAY_PROXY, TVTORRENTS, TVTORRENTS_DIGEST, TVTORRENTS_HASH, TORRENT_DIR, USENET_RETENTION, SOCKET_TIMEOUT, \
                 SEARCH_FREQUENCY, DEFAULT_SEARCH_FREQUENCY, BACKLOG_SEARCH_FREQUENCY, \
-                QUALITY_DEFAULT, SEASON_FOLDERS_FORMAT, SEASON_FOLDERS_DEFAULT, STATUS_DEFAULT, \
+                QUALITY_DEFAULT, SEASON_FOLDERS_FORMAT, SEASON_FOLDERS_DEFAULT, ANIME_DEFAULT, STATUS_DEFAULT, \
                 GROWL_NOTIFY_ONSNATCH, GROWL_NOTIFY_ONDOWNLOAD, TWITTER_NOTIFY_ONSNATCH, TWITTER_NOTIFY_ONDOWNLOAD, \
                 USE_GROWL, GROWL_HOST, GROWL_PASSWORD, USE_PROWL, PROWL_NOTIFY_ONSNATCH, PROWL_NOTIFY_ONDOWNLOAD, PROWL_API, PROWL_PRIORITY, PROG_DIR, NZBMATRIX, NZBMATRIX_USERNAME, \
                 NZBMATRIX_APIKEY, versionCheckScheduler, VERSION_NOTIFY, PROCESS_AUTOMATICALLY, \
@@ -366,12 +378,13 @@ def initialize(consoleLogging=True):
                 RENAME_EPISODES, properFinderScheduler, PROVIDER_ORDER, autoPostProcesserScheduler, \
                 NAMING_EP_NAME, NAMING_SEP_TYPE, NAMING_USE_PERIODS, WOMBLE, \
                 NZBSRUS, NZBSRUS_UID, NZBSRUS_HASH, NAMING_QUALITY, providerList, newznabProviderList, \
-                NAMING_DATES, EXTRA_SCRIPTS, USE_TWITTER, TWITTER_USERNAME, TWITTER_PASSWORD, TWITTER_PREFIX, \
+                NAMING_DATES,NAMING_ANIME, EXTRA_SCRIPTS, USE_TWITTER, TWITTER_USERNAME, TWITTER_PASSWORD, TWITTER_PREFIX, \
                 USE_NOTIFO, NOTIFO_USERNAME, NOTIFO_APISECRET, NOTIFO_NOTIFY_ONDOWNLOAD, NOTIFO_NOTIFY_ONSNATCH, \
                 USE_LIBNOTIFY, LIBNOTIFY_NOTIFY_ONSNATCH, LIBNOTIFY_NOTIFY_ONDOWNLOAD, USE_NMJ, NMJ_HOST, NMJ_DATABASE, NMJ_MOUNT, USE_SYNOINDEX, \
                 USE_BANNER, USE_LISTVIEW, METADATA_XBMC, METADATA_MEDIABROWSER, METADATA_PS3, metadata_provider_dict, \
-                NEWZBIN, NEWZBIN_USERNAME, NEWZBIN_PASSWORD, GIT_PATH, MOVE_ASSOCIATED_FILES, \
-                COMING_EPS_LAYOUT, COMING_EPS_SORT, COMING_EPS_DISPLAY_PAUSED, METADATA_WDTV, METADATA_TIVO, IGNORE_WORDS
+                NEWZBIN, NEWZBIN_USERNAME, NEWZBIN_PASSWORD,FANZUB, GIT_PATH, MOVE_ASSOCIATED_FILES, \
+                COMING_EPS_LAYOUT, COMING_EPS_SORT, COMING_EPS_DISPLAY_PAUSED, METADATA_WDTV, METADATA_TIVO, IGNORE_WORDS, \
+                ANIMESUPPORT, USE_ANIDB, ANIDB_USERNAME, ANIDB_PASSWORD, ANIDB_USE_MYLIST, ANIME_SPLIT_HOME
 
         if __INITIALIZED__:
             return False
@@ -454,6 +467,7 @@ def initialize(consoleLogging=True):
         VERSION_NOTIFY = check_setting_int(CFG, 'General', 'version_notify', 1)
         SEASON_FOLDERS_FORMAT = check_setting_str(CFG, 'General', 'season_folders_format', 'Season %02d')
         SEASON_FOLDERS_DEFAULT = bool(check_setting_int(CFG, 'General', 'season_folders_default', 0))
+        ANIME_DEFAULT = bool(check_setting_int(CFG, 'General', 'anime_default', 0))
 
         PROVIDER_ORDER = check_setting_str(CFG, 'General', 'provider_order', '').split()
 
@@ -465,6 +479,7 @@ def initialize(consoleLogging=True):
         NAMING_USE_PERIODS = bool(check_setting_int(CFG, 'General', 'naming_use_periods', 0))
         NAMING_QUALITY = bool(check_setting_int(CFG, 'General', 'naming_quality', 0))
         NAMING_DATES = bool(check_setting_int(CFG, 'General', 'naming_dates', 1))
+        NAMING_ANIME = check_setting_int(CFG, 'General', 'naming_anime', 1)
 
         TVDB_BASE_URL = 'http://www.thetvdb.com/api/' + TVDB_API_KEY
 
@@ -525,6 +540,8 @@ def initialize(consoleLogging=True):
         NEWZBIN = bool(check_setting_int(CFG, 'Newzbin', 'newzbin', 0))
         NEWZBIN_USERNAME = check_setting_str(CFG, 'Newzbin', 'newzbin_username', '')
         NEWZBIN_PASSWORD = check_setting_str(CFG, 'Newzbin', 'newzbin_password', '')
+
+        FANZUB = bool(check_setting_int(CFG, 'Fanzub', 'fanzub', 1))
 
         WOMBLE = bool(check_setting_int(CFG, 'Womble', 'womble', 1))
 
@@ -604,6 +621,14 @@ def initialize(consoleLogging=True):
 
         metadata_provider_dict = metadata.get_metadata_generator_dict()
         
+        ANIMESUPPORT = False
+        USE_ANIDB = check_setting_str(CFG, 'ANIDB', 'use_anidb', '')
+        ANIDB_USERNAME = check_setting_str(CFG, 'ANIDB', 'anidb_username', '')
+        ANIDB_PASSWORD = check_setting_str(CFG, 'ANIDB', 'anidb_password', '')
+        ANIDB_USE_MYLIST = check_setting_str(CFG, 'ANIDB', 'anidb_use_mylist', '')
+
+        ANIME_SPLIT_HOME = bool(check_setting_int(CFG, 'ANIME', 'anime_split_home', 0))
+
         # if this exists it's legacy, use the info to upgrade metadata to the new settings
         if METADATA_TYPE:
 
@@ -830,6 +855,15 @@ def halt ():
                 properFinderScheduler.thread.join(10)
             except:
                 pass
+            
+            if ADBA_CONNECTION:
+                ADBA_CONNECTION.logout()
+                #ADBA_CONNECTION.stop()
+                logger.log(u"Waiting for the ANIDB CONNECTION thread to exit")
+                try:
+                    ADBA_CONNECTION.join(5)
+                except:
+                    pass
 
 
             __INITIALIZED__ = False
@@ -946,6 +980,7 @@ def save_config():
     new_config['General']['status_default'] = int(STATUS_DEFAULT)
     new_config['General']['season_folders_format'] = SEASON_FOLDERS_FORMAT
     new_config['General']['season_folders_default'] = int(SEASON_FOLDERS_DEFAULT)
+    new_config['General']['anime_default'] = int(ANIME_DEFAULT)
     new_config['General']['provider_order'] = ' '.join([x.getID() for x in providers.sortedProviderList()])
     new_config['General']['version_notify'] = int(VERSION_NOTIFY)
     new_config['General']['naming_ep_name'] = int(NAMING_EP_NAME)
@@ -956,6 +991,7 @@ def save_config():
     new_config['General']['naming_use_periods'] = int(NAMING_USE_PERIODS)
     new_config['General']['naming_quality'] = int(NAMING_QUALITY)
     new_config['General']['naming_dates'] = int(NAMING_DATES)
+    new_config['General']['naming_anime'] = int(NAMING_ANIME)
     new_config['General']['launch_browser'] = int(LAUNCH_BROWSER)
 
     new_config['General']['use_banner'] = int(USE_BANNER)
@@ -1020,6 +1056,9 @@ def save_config():
     new_config['Newzbin']['newzbin'] = int(NEWZBIN)
     new_config['Newzbin']['newzbin_username'] = NEWZBIN_USERNAME
     new_config['Newzbin']['newzbin_password'] = NEWZBIN_PASSWORD
+    
+    new_config['Fanzub'] = {}
+    new_config['Fanzub']['fanzub'] = int(FANZUB)
 
     new_config['Womble'] = {}
     new_config['Womble']['womble'] = int(WOMBLE)
@@ -1101,6 +1140,15 @@ def save_config():
 
     new_config['Newznab'] = {}
     new_config['Newznab']['newznab_data'] = '!!!'.join([x.configStr() for x in newznabProviderList])
+
+    new_config['ANIDB'] = {}
+    new_config['ANIDB']['use_anidb'] = USE_ANIDB
+    new_config['ANIDB']['anidb_username'] = ANIDB_USERNAME
+    new_config['ANIDB']['anidb_password'] = ANIDB_PASSWORD
+    new_config['ANIDB']['anidb_use_mylist'] = ANIDB_USE_MYLIST
+
+    new_config['ANIME'] = {}
+    new_config['ANIME']['anime_split_home'] = int(ANIME_SPLIT_HOME)
 
     new_config['GUI'] = {}
     new_config['GUI']['coming_eps_layout'] = COMING_EPS_LAYOUT

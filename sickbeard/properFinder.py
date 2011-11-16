@@ -31,7 +31,8 @@ from sickbeard.common import DOWNLOADED, SNATCHED, SNATCHED_PROPER, Quality
 
 from lib.tvdb_api import tvdb_api, tvdb_exceptions
 
-from name_parser.parser import NameParser, InvalidNameException
+from name_parser.parser import InvalidNameException
+from sickbeard.helpers import parse_result_wrapper
 
 
 class ProperFinder():
@@ -93,13 +94,12 @@ class ProperFinder():
 
             # parse the file name
             try:
-                myParser = NameParser(False)
-                parse_result = myParser.parse(curProper.name)
+                parse_result = parse_result_wrapper(None, curProper.name)
             except InvalidNameException:
                 logger.log(u"Unable to parse the filename "+curProper.name+" into a valid episode", logger.DEBUG)
                 continue
 
-            if not parse_result.episode_numbers:
+            if not parse_result.episode_numbers and not parse_result.is_anime:
                 logger.log(u"Ignoring "+curProper.name+" because it's for a full season rather than specific episode", logger.DEBUG)
                 continue
 
@@ -109,8 +109,14 @@ class ProperFinder():
                 curProper.episode = parse_result.air_date
             else:
                 curProper.season = parse_result.season_number if parse_result.season_number != None else 1
-                curProper.episode = parse_result.episode_numbers[0]
-            curProper.quality = Quality.nameQuality(curProper.name)
+                if parse_result.is_anime:
+                    logger.log(u"I am sorry '"+curProper.name+"' seams to be an anime proper seach is not yet suported", logger.DEBUG)
+                    continue
+                    curProper.episode = parse_result.ab_episode_numbers[0]
+                else:
+                    curProper.episode = parse_result.episode_numbers[0]
+            
+            curProper.quality = Quality.nameQuality(curProper.name,parse_result.is_anime)
 
             # for each show in our list
             for curShow in sickbeard.showList:
