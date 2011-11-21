@@ -81,7 +81,7 @@ if sys.platform == 'darwin':
     osVersion = platform.mac_ver()[0]
     osVersionMayor, osVersionMinor, osVersionMicro = osVersion.split(".")
     volumeName = "%s-osx-%s-build%s" % (name , majorVersion, build) # volume name
-    osxDmg = "dist/%s.dmg" % (volumeName) # dmg file name
+    osxDmg = "dist/%s.dmg" % (volumeName) # dmg file name/path
     #SickBeard-win32-alpha-build489.zip
     # Check which Python flavour
     apple_py = 'ActiveState' not in sys.copyright
