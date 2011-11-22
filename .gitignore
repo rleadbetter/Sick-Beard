@@ -31,3 +31,15 @@ ehthumbs.db
 Thumbs.db
 .directory
 *~
+
+#      Binary        #
+######################
+dist/*
+build/*
+autoProcessTV/dist/*
+autoProcessTV/build/*
+SickBeard-win32-*.zip
+*.exe
+gc.ini
+CHANGELOG.txt
+
