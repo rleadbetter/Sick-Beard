@@ -43,10 +43,10 @@ def writeSickbeardVersionFile(version):
         return False
 
 def getNiceOSString(buildParams):
-    if (sys.platform == 'darwin' and buildParams['target'] == 'auto') or buildParams['target'] in ('osx','OSX','MAC'):
+    if (sys.platform == 'darwin' and buildParams['target'] == 'auto') or buildParams['target'] in ('osx', 'OSX', 'MAC'):
         return "OSX"
-    elif (sys.platform == 'win32' and buildParams['target'] == 'auto')  or buildParams['target'] in ('win','WIN','Win32'):
-        return "Win32"
+    elif (sys.platform == 'win32' and buildParams['target'] == 'auto')  or buildParams['target'] in ('win', 'WIN', 'Win32'):
+        return "Win"
     else:
         return "unknown"
 
@@ -57,7 +57,7 @@ def getLatestCommitID(buildParams):
         if newestCommit == "":
             long = curCommit.id
             short = long[:6]
-            return (long,short)
+            return (long, short)
 
 def writeChangelog(buildParams):
     # start building the CHANGELOG.txt
@@ -72,12 +72,12 @@ def writeChangelog(buildParams):
             break
         curID = curCommit.id
         changeString += "#### %s ####\n%s\n" % (curID[:6], curCommit.message)
-    
+
     # if we didn't find any changes don't make a changelog file
     if buildParams['gitNewestCommit'] != "":
         newChangelog = open("CHANGELOG.txt", "w")
-        newChangelog.write(buildParams['gitNewestCommit']+"\n\n")
-        newChangelog.write("Changelog for build "+str(buildParams['build'])+"\n\n")
+        newChangelog.write(buildParams['gitNewestCommit'] + "\n\n")
+        newChangelog.write("Changelog for build " + str(buildParams['build']) + "\n\n")
         newChangelog.write(changeString)
         newChangelog.close()
     else:
@@ -95,7 +95,7 @@ def recursive_find_data_files(root_dir, allowed_extensions=('*')):
         for cur_filename in filenames:
             matches_pattern = False
             for cur_pattern in allowed_extensions:
-                if fnmatch.fnmatch(cur_filename, '*.'+cur_pattern):
+                if fnmatch.fnmatch(cur_filename, '*.' + cur_pattern):
                     matches_pattern = True
             if not matches_pattern:
                 continue
@@ -111,8 +111,8 @@ def find_all_libraries(root_dirs):
         for (dirpath, dirnames, filenames) in os.walk(cur_root_dir):
             if '__init__.py' not in filenames:
                 continue
-            libs.append(dirpath.replace(os.sep, '.')) 
-    
+            libs.append(dirpath.replace(os.sep, '.'))
+
     return libs
 
 
@@ -123,7 +123,7 @@ def allFiles(dir):
         if os.path.isdir(fullFile):
             files += allFiles(fullFile)
         else:
-            files.append(fullFile) 
+            files.append(fullFile)
 
     return files
 
@@ -131,12 +131,16 @@ def allFiles(dir):
 #  build functions  #
 #####################
 def buildWIN(buildParams):
+    #constants
+    Win32ConsoleName = 'SickBeard-console.exe'
+    Win32WindowName = 'SickBeard.exe'
+
     try:
         import py2exe
     except ImportError:
-        print 'ERROR you need py2exe to build a win binary'
+        print 'ERROR you need py2exe to build a win binary http://www.py2exe.org/'
         return False
-        
+
     # save the original arguments and replace them with the py2exe args
     oldArgs = []
     if len(sys.argv) > 1:
@@ -144,23 +148,23 @@ def buildWIN(buildParams):
         del sys.argv[1:]
 
     sys.argv.append('py2exe')
-    
+
     # root source dir
     #compile_dir = os.path.dirname(os.path.normpath(os.path.abspath(sys.argv[0])))
-    
+
     # set up the compilation options
     data_files = recursive_find_data_files('data', ['gif', 'png', 'jpg', 'ico', 'js', 'css', 'tmpl'])
-    
+
     options = dict(
-        name=name,
-        version=release,
+        name=buildParams['name'],
+        version=buildParams['build'],
         author='%s-Team' % buildParams['name'],
         author_email='sickbeard.team@gmail.com',
-        description=name + ' ' + release,
+        description=buildParams['packageName'],
         scripts=[buildParams['mainPy']],
         packages=find_all_libraries(['sickbeard', 'lib']),
     )
-    
+
     # set up py2exe to generate the console app
     program = [ {'script': buildParams['mainPy'] } ]
     options['options'] = {'py2exe':
@@ -175,67 +179,87 @@ def buildWIN(buildParams):
     options['zipfile'] = 'lib/sickbeard.zip'
     options['console'] = program
     options['data_files'] = data_files
-    
+
+    if buildParams['test']:
+        print
+        print "########################################"
+        print "NOT Building exe this was a TEST."
+        print "########################################"
+        return True
+
     # compile sickbeard-console.exe
     setup(**options)
-    
+
     # rename the exe to sickbeard-console.exe
     try:
         if os.path.exists("dist/%s" % Win32ConsoleName):
             os.remove("dist/%s" % Win32ConsoleName)
         os.rename("dist/%s" % Win32WindowName, "dist/%s" % Win32ConsoleName)
     except:
+        print
+        print "########################################"
         print "Cannot create dist/%s" % Win32ConsoleName
-        #sys.exit(1)
-    
+        print "########################################"
+        return False
+
     # we don't need this stuff when we make the 2nd exe
     del options['console']
     del options['data_files']
     options['windows'] = program
-    
+
     # compile sickbeard.exe
     setup(**options)
-    
+
     # compile sabToSickbeard.exe using the existing setup.py script
-    auto_process_dir = os.path.join(compile_dir, 'autoProcessTV')
-    p = subprocess.Popen([ sys.executable, os.path.join(auto_process_dir, 'setup.py') ], cwd=auto_process_dir, shell=True)
-    o,e = p.communicate()
-    
+
+    auto_process_dir = 'autoProcessTV'
+    p = subprocess.Popen([ sys.executable, 'setup.py' ], cwd=auto_process_dir)
+    o, e = p.communicate()
     # copy autoProcessTV files to the dist dir
     auto_process_files = ['autoProcessTV/sabToSickBeard.py',
                           'autoProcessTV/hellaToSickBeard.py',
                           'autoProcessTV/autoProcessTV.py',
                           'autoProcessTV/autoProcessTV.cfg.sample',
                           'autoProcessTV/sabToSickBeard.exe']
-     
+
     os.makedirs('dist/autoProcessTV')
-     
+
+    print
+    print "########################################"
+    print "Copy Files"
+    print "########################################"
     for curFile in auto_process_files:
         newFile = os.path.join('dist', curFile)
         print "Copying file from", curFile, "to", newFile
         shutil.copy(curFile, newFile)
-    
+
     # compile updater.exe
     setup(
-          options = {'py2exe': {'bundle_files': 1}},
-          zipfile = None,
-          console = ['updater.py'],
+          options={'py2exe': {'bundle_files': 1}},
+          zipfile=None,
+          console=['updater.py'],
     )
-    # figure out what we're going to call the zip file
+
+    print
+    print "########################################"
     print 'Zipping files...'
-    zipFilename = buildParams['packageName']
-    
+    print "########################################"
+    zipFilename = os.path.join('dist', buildParams['packageName'])
+
     # get a list of files to add to the zip
-    zipFileList = allFiles('dist/')
+    zipFileList = allFiles('dist')
     # add all files to the zip
     z = zipfile.ZipFile(zipFilename + '.zip', 'w', zipfile.ZIP_DEFLATED)
     for file in zipFileList:
-        z.write(file, file.replace('dist/', zipFilename + '/'))
+        z.write(file, file.replace('dist', buildParams['packageName']))
     z.close()
-    
-    print "Created zip at", zipFilename
 
-    return False
+    print
+    print "########################################"
+    print "EXE build successful."
+    print "ZIP is located at %s" % os.path.abspath(zipFilename)
+    print "########################################"
+    return True
 
 def buildOSX(buildParams):
     # OSX constants
@@ -413,8 +437,8 @@ def main():
     print "########################################"
     print "Starting..."
     print "########################################"
-    
-    
+
+
     buildParams = {}
     ######################
     # check arguments
@@ -422,6 +446,8 @@ def main():
     buildParams['test'] = False
     buildParams['target'] = 'auto'
     buildParams['nightly'] = False
+    buildParams['year'] = ""
+    buildParams['month'] = ""
     # win
     buildParams['py2ExeArgs'] = []
     # osx
@@ -429,10 +455,11 @@ def main():
     buildParams['py2AppArgs'] = ['py2app']
     buildParams['osxDmgImage'] = ""
 
+
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "", [ 'test', 'onlyApp', 'nightly', 'dmgbg=', 'py2appArgs=', 'target=']) #@UnusedVariable
+        opts, args = getopt.getopt(sys.argv[1:], "", [ 'test', 'onlyApp', 'nightly', 'dmgbg=', 'py2appArgs=', 'target=', 'year=', 'month=']) #@UnusedVariable
     except getopt.GetoptError:
-        print "Available options: --test, --dmgbg, --onlyApp, --nightly, --py2appArgs"
+        print "Available options: --test, --dmgbg, --onlyApp, --nightly, --py2appArgs, --target, --year, --month"
         exit(1)
 
     for o, a in opts:
@@ -450,12 +477,18 @@ def main():
 
         if o in ('--py2appArgs'):
             buildParams['py2AppArgs'] = py2AppArgs + a.split()
-            
+
         if o in ('--dmgbg'):
             buildParams['osxDmgImage'] = a
 
         if o in ('--target'):
             buildParams['target'] = a
+
+        if o in ('--year'):
+            buildParams['year'] = a
+
+        if o in ('--month'):
+            buildParams['month'] = a
 
     ######################
     # constants
@@ -473,7 +506,13 @@ def main():
     """
     # date stuff
     buildParams['thisYearString'] = date.today().strftime("%Y") # for the copyright notice
-    buildParams['yearMonth'] = date.today().strftime("%y.%m")
+
+    if not buildParams['year']:
+        buildParams['year'] = date.today().strftime("%y")
+    if not buildParams['month']:
+        buildParams['month'] = date.today().strftime("%m")
+
+    buildParams['yearMonth'] = "%s.%s" % (buildParams['year'], buildParams['month'])
     # buildParams['gitLastCommit'] = subprocess.Popen(["git", "describe", "--tag"], stdout=subprocess.PIPE).communicate()[0].strip().split("-")[2] # bet there is a simpler way
 
     buildParams['gitNewestCommit'], buildParams['gitNewestCommitShort'] = getLatestCommitID(buildParams)
@@ -486,7 +525,7 @@ def main():
 
     # the new SICKBEARD_VERSION string visible to the user and used in the binary package file name
     buildParams['newSBVersion'] = "%s %s" % (buildParams['osName'], buildParams['build'])
-    
+
     print "setting SICKBEARD_VERSION to %s ..." % (buildParams['newSBVersion']),
     if not writeSickbeardVersionFile(buildParams['newSBVersion']):
         print "ERROR"
@@ -511,12 +550,12 @@ def main():
     #####################
     # write changelog
     writeChangelog(buildParams)
-    
-    
+
+
     # os switch
     if buildParams['osName'] == 'OSX':
         result = buildOSX(buildParams)
-    elif buildParams['osName'] == 'Win32':
+    elif buildParams['osName'] == 'Win':
         result = buildWIN(buildParams)
     else:
         result = False

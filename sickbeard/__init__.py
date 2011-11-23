@@ -853,6 +853,7 @@ def saveAndShutdown(restart=False):
         os.remove(PIDFILE)
 
     if restart:
+        logger.log(u"Determining restart method...")
         install_type = versionCheckScheduler.action.install_type
 
         popen_list = []
@@ -866,6 +867,10 @@ def saveAndShutdown(restart=False):
             else:
                 logger.log(u"Unknown SB launch method, please file a bug report about this", logger.ERROR)
                 popen_list = [sys.executable, os.path.join(PROG_DIR, 'updater.py'), str(PID), sys.executable, MY_FULLNAME ]
+        elif install_type == 'osx':
+            m = re.search(r'(^.+?)/Contents', PROG_DIR)
+            executablePath = os.path.join(m.group(0),"MacOS","SickBeard")
+            popen_list = [executablePath]
 
         if popen_list:
             popen_list += MY_ARGS
@@ -873,8 +878,10 @@ def saveAndShutdown(restart=False):
                 popen_list += ['--nolaunch']
             logger.log(u"Restarting Sick Beard with " + str(popen_list))
             subprocess.Popen(popen_list, cwd=os.getcwd())
-
+        else:        
+            logger.log(u"not able to restart")
     os._exit(0)
+
 
 
 def invoke_command(to_call, *args, **kwargs):

@@ -23,7 +23,7 @@ from sickbeard import scene_exceptions
 from sickbeard.exceptions import ex
 
 import os, platform, shutil
-import subprocess, re
+import subprocess, re, json
 import urllib, urllib2
 import zipfile, tarfile
 
@@ -72,7 +72,7 @@ class CheckVersion():
         if getattr(sys, 'frozen', None) == 'macosx_app':
             install_type = 'osx'
         # check if we're a windows build
-        elif version.SICKBEARD_VERSION.startswith('build '):
+        elif sys.platform == 'win32':
             install_type = 'win'
         elif os.path.isdir(os.path.join(sickbeard.PROG_DIR, '.git')):
             install_type = 'git'
@@ -117,18 +117,18 @@ class BinaryUpdateManager(UpdateManager):
         self._cur_version = None
         self._newest_version = None
 
-        self.gc_url = 'http://nothing'
-        self.gc_url_human = 'http://nothing_human'
+        self.gc_url = 'http://sickbeard.hostingsociety.com/latest.php'
+        self.gc_url_human = 'http://sickbeard.hostingsociety.com/'
 
     def need_update(self):
         self._cur_version = self._find_installed_version()
-        self._newest_version = self._find_newest_version()
+        self._newest_version, self._newest_versionRaw = self._find_newest_version()
 
         if self._newest_version > self._cur_version:
             return True
 
     def set_newest_text(self):
-        new_str = 'There is a <a href="' + self.gc_url_human + '" onclick="window.open(this.href); return false;">newer version available</a> (build ' + str(self._newest_version) + ')'
+        new_str = 'There is a <a href="' + self.gc_url_human + '" onclick="window.open(this.href); return false;">newer version available</a> (build ' + str(self._newest_versionRaw) + ')'
         new_str += "&mdash; <a href=\"" + self.get_update_url() + "\">Update Now</a>"
         sickbeard.NEWEST_VERSION_STRING = new_str
 
@@ -150,57 +150,30 @@ class BinaryUpdateManager(UpdateManager):
         regex = "SickBeard.*?(\d{2}\.\d{2})(\.[\w]+)?\.dmg"
 
         svnFile = urllib.urlopen(self.gc_url)
-
-        for curLine in svnFile.readlines():
-            match = re.search(regex, curLine)
-            if match:
-                if whole_link:
-                    return self.gc_url + match.group(0)
-                else:
-                    return int(match.group(1).replace(".", ""))
-
+        lines = svnFile.readlines()
+        if len(lines) == 1:
+            result = json.loads(lines[0])
+            if whole_link:
+                return result['link']
+            else:
+               return (int(result['version'].replace(".", "")), result['version'])
+        
         return None
 
 class WindowsUpdateManager(BinaryUpdateManager):
 
     def __init__(self):
         BinaryUpdateManager.__init__(self)
+        
+        self.gc_url = 'http://sickbeard.hostingsociety.com/latest.php?os=win'
 
-    def _find_newest_version(self, whole_link=False):
-        """
-        Checks google code for the newest Windows binary build. Returns either the
-        build number or the entire build URL depending on whole_link's value.
-
-        whole_link: If True, returns the entire URL to the release. If False, it returns
-                    only the build number. default: False
-        """
-
-        regex = "//sickbeard\.googlecode\.com/files/SickBeard\-win32\-alpha\-build(\d+)(?:\.\d+)?\.zip"
-
-        svnFile = urllib.urlopen(self.gc_url)
-
-        for curLine in svnFile.readlines():
-            match = re.search(regex, curLine)
-            if match:
-                if whole_link:
-                    return match.group(0)
-                else:
-                    return int(match.group(1))
-
-        return None
-
-
-    def set_newest_text(self):
-        new_str = 'There is a <a href="' + self.gc_url + '" onclick="window.open(this.href); return false;">newer version available</a> (build ' + str(self._newest_version) + ')'
-        new_str += "&mdash; <a href=\"" + self.get_update_url() + "\">Update Now</a>"
-        sickbeard.NEWEST_VERSION_STRING = new_str
 
     def update(self):
 
         new_link = self._find_newest_version(True)
 
         if not new_link:
-            logger.log(u"Unable to find a new version link on google code, not updating")
+            logger.log(u"Unable to find a new version link on "+self.gc_url+" , not updating")
             return False
 
         # download the zip
@@ -247,29 +220,37 @@ class MacUpdateManager(BinaryUpdateManager):
     def __init__(self):
         BinaryUpdateManager.__init__(self)
 
+        self.gc_url = 'http://sickbeard.hostingsociety.com/latest.php?os=mac'
 
     def update(self):
 
         new_link = self._find_newest_version(True)
 
         if not new_link:
-            logger.log(u"Unable to find a new version link on lad1337.de , not updating")
+            logger.log(u"Unable to find a new version link on "+self.gc_url+" , not updating")
             return False
 
         # download the dmg
         try:
+            m = re.search(r'(^.+?)/[\w_\-\. ]+?\.app', sickbeard.PROG_DIR)
+            installPath = m.group(1)
+
             logger.log(u"Downloading update file from " + str(new_link))
             (filename, headers) = urllib.urlretrieve(new_link) #@UnusedVariable
-
+            
+            logger.log(u"New dmg at " + filename)
             os.system("hdiutil mount %s | grep /Volumes/SickBeard >update_mount.log" % (filename))
             fp = open('update_mount.log', 'r')
             data = fp.read()
             fp.close()
-            m = re.search(r'/dev/(\w+)\s+', data)
+            m = re.search(r'/Volumes/(.+)', data)
             updateVolume = m.group(1)
-            logger.log(u"Copying app from /Volumes/%s/SickBeard.app to %s" % (updateVolume, "/Applications"))
-            call(["cp", "-rf", "/Volumes/%s/SickBeard.app" % updateVolume, "/Applications"])
-
+            logger.log(u"Copying app from /Volumes/%s/SickBeard.app to %s" % (updateVolume, installPath))
+            call(["cp", "-rf", "/Volumes/%s/SickBeard.app" % updateVolume, installPath])
+            
+            logger.log(u"Eject imgae /Volumes/%s/" % updateVolume)
+            call(["hdiutil", "eject", "/Volumes/%s/" % updateVolume], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
             # delete the dmg
             logger.log(u"Deleting dmg file from " + str(filename))
             os.remove(filename)
