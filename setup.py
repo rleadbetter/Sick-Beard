@@ -290,15 +290,18 @@ def buildOSX(buildParams):
     osVersion = platform.mac_ver()[0]
     osVersionMayor, osVersionMinor, osVersionMicro = osVersion.split(".")
     osxDmg = "dist/%s.dmg" % buildParams['packageName'] # dmg file name/path
-    """ seams like this is not always available in the default python dont check
+    
     try:
         import PyObjCTools
     except ImportError:
         print
-        print 'ERROR you need PyObjCTools to build'
+        print "########################################"
+        print 'WARNING PyObjCTools is not available'
         print 'this is included in the default python that comes with the system'
-        return False
-    """
+        print 'you can try: sudo easy_install pyobjc==2.2'
+        print 'however the app can be build but the mac menu will be missing !!'
+        print "########################################"
+
     try:
         import py2app
     except ImportError:
