@@ -160,6 +160,7 @@ def buildWIN(buildParams):
     try:
         import py2exe
     except ImportError:
+        print
         print 'ERROR you need py2exe to build a win binary http://www.py2exe.org/'
         return False
 
@@ -170,9 +171,6 @@ def buildWIN(buildParams):
         del sys.argv[1:]
 
     sys.argv.append('py2exe')
-
-    # root source dir
-    #compile_dir = os.path.dirname(os.path.normpath(os.path.abspath(sys.argv[0])))
 
     # set up the compilation options
     data_files = recursive_find_data_files('data', ['gif', 'png', 'jpg', 'ico', 'js', 'css', 'tmpl'])
@@ -294,8 +292,17 @@ def buildOSX(buildParams):
     osxDmg = "dist/%s.dmg" % buildParams['packageName'] # dmg file name/path
 
     try:
+        import PyObjCTools
+    except ImportError:
+        print
+        print 'ERROR you need PyObjCTools to build'
+        print 'this is included in the default python that comes with the system'
+        return False
+
+    try:
         import py2app
     except ImportError:
+        print
         print 'ERROR you need py2app to build a mac app http://pypi.python.org/pypi/py2app/'
         return False
 
