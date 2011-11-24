@@ -290,7 +290,7 @@ def buildOSX(buildParams):
     osVersion = platform.mac_ver()[0]
     osVersionMayor, osVersionMinor, osVersionMicro = osVersion.split(".")
     osxDmg = "dist/%s.dmg" % buildParams['packageName'] # dmg file name/path
-
+    """ seams like this is not always available in the default python dont check
     try:
         import PyObjCTools
     except ImportError:
@@ -298,7 +298,7 @@ def buildOSX(buildParams):
         print 'ERROR you need PyObjCTools to build'
         print 'this is included in the default python that comes with the system'
         return False
-
+    """
     try:
         import py2app
     except ImportError:
