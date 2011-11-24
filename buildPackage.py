@@ -16,8 +16,6 @@ import glob
 from datetime import date
 import subprocess
 from subprocess import call, Popen
-
-
 import urllib, ConfigParser
 from distutils.core import setup
 import zipfile, fnmatch
@@ -26,15 +24,31 @@ from lib.pygithub import github
 
 ######################
 # helper functions
+# ascii art done here http://www.network-science.de/ascii/
+def fancyLogoMac():
+    return r"""
+  _____ _      _    ____                     _    ____   _______   __
+ / ____(_)    | |  |  _ \                   | |  / __ \ / ____\ \ / /
+| (___  _  ___| | _| |_) | ___  __ _ _ __ __| | | |  | | (___  \ V / 
+ \___ \| |/ __| |/ /  _ < / _ \/ _` | '__/ _` | | |  | |\___ \  > <  
+ ____) | | (__|   <| |_) |  __/ (_| | | | (_| | | |__| |____) |/ . \ 
+|_____/|_|\___|_|\_\____/ \___|\__,_|_|  \__,_|  \____/|_____//_/ \_\
+"""
+def fancyLogoWin():
+    return r"""
+  _____ _      _    ____                     _  __          ___       
+ / ____(_)    | |  |  _ \                   | | \ \        / (_)      
+| (___  _  ___| | _| |_) | ___  __ _ _ __ __| |  \ \  /\  / / _ _ __  
+ \___ \| |/ __| |/ /  _ < / _ \/ _` | '__/ _` |   \ \/  \/ / | | '_ \ 
+ ____) | | (__|   <| |_) |  __/ (_| | | | (_| |    \  /\  /  | | | | |
+|_____/|_|\___|_|\_\____/ \___|\__,_|_|  \__,_|     \/  \/   |_|_| |_|
+"""
+
 def writeSickbeardVersionFile(version):
-    # Create a file object:
-    # in "write" mode
-    versionFile = open(os.path.join("sickbeard", "version.py"), "w")
     sbVersionVarName = "SICKBEARD_VERSION"
     content = '%s = "%s"\n' % (sbVersionVarName, version)
-    # Write all the lines at once:
-    versionFile.writelines(content)
-    versionFile.close()
+    # write
+    writeSickbeardVersionFileRaw(content)
     # now lets try to import the written file
     from sickbeard.version import SICKBEARD_VERSION
     if SICKBEARD_VERSION == version:
@@ -42,6 +56,18 @@ def writeSickbeardVersionFile(version):
     else:
         return False
 
+def writeSickbeardVersionFileRaw(content):
+    # Create a file object:
+    # in "write" mode
+    versionFile = open(os.path.join("sickbeard", "version.py"), "w")
+    versionFile.writelines(content)
+    versionFile.close()
+    
+def readSickbeardVersionFile():
+    versionFile = open(os.path.join("sickbeard", "version.py"), "r+")
+    content = versionFile.read()
+    return content
+    
 def getNiceOSString(buildParams):
     if (sys.platform == 'darwin' and buildParams['target'] == 'auto') or buildParams['target'] in ('osx', 'OSX', 'MAC'):
         return "OSX"
@@ -61,7 +87,7 @@ def getLatestCommitID(buildParams):
 
 def writeChangelog(buildParams):
     # start building the CHANGELOG.txt
-    print 'Creating changelog'
+    print 'Creating / writing changelog'
     gh = github.GitHub()
     lastCommit = ""
     changeString = ""
@@ -75,17 +101,13 @@ def writeChangelog(buildParams):
 
     # if we didn't find any changes don't make a changelog file
     if buildParams['gitNewestCommit'] != "":
-        newChangelog = open("CHANGELOG.txt", "w")
-        newChangelog.write(buildParams['gitNewestCommit'] + "\n\n")
-        newChangelog.write("Changelog for build " + str(buildParams['build']) + "\n\n")
+        newChangelog = open(os.path.join('dist',"CHANGELOG.txt"), "w")
+        newChangelog.write("Changelog for build " + str(buildParams['build']) + " ("+buildParams['gitNewestCommit']+")\n\n")
         newChangelog.write(changeString)
         newChangelog.close()
+        print "changelog writen"
     else:
         print "No changes found, keeping old changelog"
-
-    # put the changelog in the compile dir
-    if os.path.exists("CHANGELOG.txt"):
-        shutil.copy('CHANGELOG.txt', 'dist/')
 
 def recursive_find_data_files(root_dir, allowed_extensions=('*')):
     to_return = {}
@@ -435,7 +457,7 @@ def buildOSX(buildParams):
 def main():
     print
     print "########################################"
-    print "Starting..."
+    print "Starting build ..."
     print "########################################"
 
 
@@ -449,7 +471,7 @@ def main():
     buildParams['year'] = ""
     buildParams['month'] = ""
     # win
-    buildParams['py2ExeArgs'] = []
+    buildParams['py2ExeArgs'] = [] # not used yet
     # osx
     buildParams['onlyApp'] = False
     buildParams['py2AppArgs'] = ['py2app']
@@ -499,6 +521,7 @@ def main():
     buildParams['osName'] = getNiceOSString(buildParams); # look in getNiceOSString() for default os nice names
 
     """
+    # maybe some day the git tag is used this might be handy although it might be easier ti use the github lib
     # dynamic build number and date stuff
     tagsRaw = subprocess.Popen(["git", "tag"], stdout=subprocess.PIPE).communicate()[0]
     lastTagRaw = tagsRaw.split("\n")[-2] # current tag e.g. build-###
@@ -526,11 +549,19 @@ def main():
     # the new SICKBEARD_VERSION string visible to the user and used in the binary package file name
     buildParams['newSBVersion'] = "%s %s" % (buildParams['osName'], buildParams['build'])
 
+    print "backup SickbeardVersionFile ...",
+    oldSickbeardVersionFile = readSickbeardVersionFile()
+    if not oldSickbeardVersionFile:
+        print "ERROR"
+        print "seams like reading the verision.py file failed. permissions ?"
+        exit(1)
+    else:
+        print "ok"
+
     print "setting SICKBEARD_VERSION to %s ..." % (buildParams['newSBVersion']),
     if not writeSickbeardVersionFile(buildParams['newSBVersion']):
         print "ERROR"
         print "seams like writing the verision.py file failed. permissions ?"
-        print "stopping..."
         exit(1)
     else:
         print "ok"
@@ -545,25 +576,54 @@ def main():
             shutil.rmtree('build')
         if os.path.exists('dist'):
             shutil.rmtree('dist')
+        # a windows build creats these folder too ... clear them
+        scriptBuild = os.path.join('autoProcessTV','build')
+        scriptDist = os.path.join('autoProcessTV','dist')
+        if os.path.exists(scriptBuild):
+            shutil.rmtree(scriptBuild)
+        if os.path.exists(scriptDist):
+            shutil.rmtree(scriptDist)
+        # create build dirs acctualy only the dist has to be made manual because the changelog will be writen there
         os.makedirs('build') # create tmp build dir
         os.makedirs('dist') # create tmp build dir
+        # TODO: do some real testing and dont just say ok
+        print "ok"
     #####################
     # write changelog
     writeChangelog(buildParams)
 
 
     # os switch
+    curFancyLogo = ""
     if buildParams['osName'] == 'OSX':
         result = buildOSX(buildParams)
+        curFancyLogo = fancyLogoMac()
     elif buildParams['osName'] == 'Win':
         result = buildWIN(buildParams)
+        curFancyLogo = fancyLogoWin()
     else:
+        print "unknown os/target valid: mac, win"
         result = False
 
     if result:
+        # lets do some clean up
+        writeSickbeardVersionFileRaw(oldSickbeardVersionFile) # rewrite the version.py
+        # remove the temp build dirs
+        if os.path.exists('build'):
+            shutil.rmtree('build')
+        if os.path.exists(scriptBuild):
+            shutil.rmtree(scriptBuild)
+        print curFancyLogo
+        print 
+        print "########################################"
+        print "Build SUCCESSFUL !!"
+        print "########################################"
         exit()
     else:
-        print "ERROR during build we have failed you"
+        print
+        print "########################################"
+        print "ERROR during build ... i have failed you"
+        print "########################################"
         exit(1)
 
 if __name__ == '__main__':
