@@ -115,15 +115,18 @@ class UpdateManager():
 class BinaryUpdateManager(UpdateManager):
     def __init__(self):
         self._cur_version = None
+        self._cur_branch  = None
         self._newest_version = None
-
+        self._newest_versionRaw = None
+        
         self.gc_url = 'http://sickbeard.hostingsociety.com/latest.php'
         self.gc_url_human = 'http://sickbeard.hostingsociety.com/'
 
     def need_update(self):
-        self._cur_version = self._find_installed_version()
+        self._cur_version, self._cur_branch = self._find_installed_version()
         self._newest_version, self._newest_versionRaw = self._find_newest_version()
-
+        logger.log("LOCAL: version: "+str(self._cur_version)+" branch: "+str(self._cur_branch), logger.DEBUG)
+        logger.log("REMOTE: version: "+str(self._newest_version), logger.DEBUG)
         if self._newest_version > self._cur_version:
             return True
 
@@ -133,11 +136,19 @@ class BinaryUpdateManager(UpdateManager):
         sickbeard.NEWEST_VERSION_STRING = new_str
 
     def _find_installed_version(self):
-        regex = "(\d{2}\.\d{2})"
+        # version = int("%d%d%02d" % (sickbeard.version.SICKBEARD_YEAR, sickbeard.version.SICKBEARD_MONTH, sickbeard.version.SICKBEARD_DAY))
+ 
+        regex = "(?P<branch>[\w_]+) (?P<year>\d{2})\.(?P<month>\d{2})(\.(?P<day>\d{2}))?"
         match = re.search(regex, sickbeard.version.SICKBEARD_VERSION)
         if match:
-            return int(match.group(1).replace(".", ""))
-        return 0
+            if match.group('day'):
+                day = match.group('day')
+            else:
+                day = "00"
+                
+            version = int(match.group('year')+match.group('month')+day)
+            return version, match.group('branch')
+        return 0, 'unknown'
 
     def _find_newest_version(self, whole_link=False):
         """
@@ -147,16 +158,20 @@ class BinaryUpdateManager(UpdateManager):
         whole_link: If True, returns the entire URL to the release. If False, it returns
                     only the build number. default: False
         """
-        regex = "SickBeard.*?(\d{2}\.\d{2})(\.[\w]+)?\.dmg"
-
-        svnFile = urllib.urlopen(self.gc_url)
+        
+        svnFile = urllib.urlopen(self.gc_url+"&branch="+self._cur_branch)
         lines = svnFile.readlines()
         if len(lines) == 1:
             result = json.loads(lines[0])
             if whole_link:
                 return result['link']
             else:
-               return (int(result['version'].replace(".", "")), result['version'])
+                if result['day'] != "00":
+                    humanVersion = str(result['year'])+"."+str(result['month'])+"."+str(result['day'])
+                else:
+                    humanVersion = str(result['year'])+"."+str(result['month'])
+                    
+                return (int(result['year']+result['month']+result['day']), humanVersion)
         
         return None
 
