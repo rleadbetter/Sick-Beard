@@ -62,12 +62,12 @@ def writeSickbeardVersionFileRaw(content):
     versionFile = open(os.path.join("sickbeard", "version.py"), "w")
     versionFile.writelines(content)
     versionFile.close()
-    
+
 def readSickbeardVersionFile():
     versionFile = open(os.path.join("sickbeard", "version.py"), "r+")
     content = versionFile.read()
     return content
-    
+
 def getNiceOSString(buildParams):
     if (sys.platform == 'darwin' and buildParams['target'] == 'auto') or buildParams['target'] in ('osx', 'OSX', 'MAC'):
         return "OSX"
@@ -81,9 +81,19 @@ def getLatestCommitID(buildParams):
     newestCommit = ""
     for curCommit in gh.commits.forBranch('SickBeard-Team', 'SickBeard'):
         if newestCommit == "":
-            long = curCommit.id
-            short = long[:6]
-            return (long, short)
+            longID = curCommit.id
+            shortID = longID[:6]
+            return (longID, shortID)
+
+def getBranch(buildParams):
+    branchRaw = subprocess.Popen(["git", "branch"], stdout=subprocess.PIPE).communicate()[0]
+
+    regex = "(\* (\w+))"
+    match = re.search(regex, branchRaw)
+    if match:
+        return match.group(2)
+    else:
+        return "unknown"
 
 def writeChangelog(buildParams):
     # start building the CHANGELOG.txt
@@ -101,8 +111,8 @@ def writeChangelog(buildParams):
 
     # if we didn't find any changes don't make a changelog file
     if buildParams['gitNewestCommit'] != "":
-        newChangelog = open(os.path.join('dist',"CHANGELOG.txt"), "w")
-        newChangelog.write("Changelog for build " + str(buildParams['build']) + " ("+buildParams['gitNewestCommit']+")\n\n")
+        newChangelog = open(os.path.join('dist', "CHANGELOG.txt"), "w")
+        newChangelog.write("Changelog for build " + str(buildParams['build']) + " (" + buildParams['gitNewestCommit'] + ")\n\n")
         newChangelog.write(changeString)
         newChangelog.close()
         print "changelog writen"
@@ -290,7 +300,7 @@ def buildOSX(buildParams):
     osVersion = platform.mac_ver()[0]
     osVersionMayor, osVersionMinor, osVersionMicro = osVersion.split(".")
     osxDmg = "dist/%s.dmg" % buildParams['packageName'] # dmg file name/path
-    
+
     try:
         import PyObjCTools
     except ImportError:
@@ -480,6 +490,8 @@ def main():
     buildParams['nightly'] = False
     buildParams['year'] = ""
     buildParams['month'] = ""
+    buildParams['day'] = ""
+    buildParams['branch'] = ""
     # win
     buildParams['py2ExeArgs'] = [] # not used yet
     # osx
@@ -489,9 +501,9 @@ def main():
 
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "", [ 'test', 'onlyApp', 'nightly', 'dmgbg=', 'py2appArgs=', 'target=', 'year=', 'month=']) #@UnusedVariable
+        opts, args = getopt.getopt(sys.argv[1:], "", [ 'test', 'onlyApp', 'nightly', 'dmgbg=', 'py2appArgs=', 'target=', 'year=', 'month=', 'day=', 'branch=']) #@UnusedVariable
     except getopt.GetoptError:
-        print "Available options: --test, --dmgbg, --onlyApp, --nightly, --py2appArgs, --target, --year, --month"
+        print "Available options: --test, --dmgbg, --onlyApp, --nightly, --py2appArgs, --target, --year, --month, --day, --branch"
         exit(1)
 
     for o, a in opts:
@@ -522,6 +534,12 @@ def main():
         if o in ('--month'):
             buildParams['month'] = a
 
+        if o in ('--day'):
+            buildParams['day'] = a
+
+        if o in ('--branch'):
+            buildParams['branch'] = a
+
     ######################
     # constants
     buildParams['mainPy'] = "SickBeard.py" # this should never change
@@ -544,17 +562,25 @@ def main():
         buildParams['year'] = date.today().strftime("%y")
     if not buildParams['month']:
         buildParams['month'] = date.today().strftime("%m")
+    if buildParams['day'] == 'auto':
+        buildParams['day'] = date.today().strftime("%d")
 
-    buildParams['yearMonth'] = "%s.%s" % (buildParams['year'], buildParams['month'])
+    if buildParams['day']:
+        buildParams['dateVersion'] = "%s.%s.%s" % (buildParams['year'], buildParams['month'], buildParams['day'])
+    else:
+        buildParams['dateVersion'] = "%s.%s" % (buildParams['year'], buildParams['month'])
+
     # buildParams['gitLastCommit'] = subprocess.Popen(["git", "describe", "--tag"], stdout=subprocess.PIPE).communicate()[0].strip().split("-")[2] # bet there is a simpler way
 
     buildParams['gitNewestCommit'], buildParams['gitNewestCommitShort'] = getLatestCommitID(buildParams)
+    if not buildParams['branch']:
+        buildParams['branch'] = getBranch(buildParams)
 
-    # this is the yy.mm string
+    # this is the 'branch yy.mm(.dd)' string
+    buildParams['build'] = "%s %s" % (buildParams['branch'], buildParams['dateVersion'])
     # or for nightlys yy.mm.commit
-    buildParams['build'] = buildParams['yearMonth']
     if buildParams['nightly']:
-        buildParams['build'] = "%s.%s" % (buildParams['yearMonth'], buildParams['gitNewestCommitShort'])
+        buildParams['build'] = "%s.%s" % (buildParams['dateVersion'], buildParams['gitNewestCommitShort'])
 
     # the new SICKBEARD_VERSION string visible to the user and used in the binary package file name
     buildParams['newSBVersion'] = "%s %s" % (buildParams['osName'], buildParams['build'])
@@ -577,6 +603,7 @@ def main():
         print "ok"
 
     buildParams['packageName'] = "%s-%s-%s" % (buildParams['name'] , buildParams['osName'] , buildParams['build']) # volume name
+    buildParams['packageName'] = buildParams['packageName'].replace(" ","-")
     #####################
     # clean the build dirs
     if not buildParams['test']:
@@ -587,8 +614,8 @@ def main():
         if os.path.exists('dist'):
             shutil.rmtree('dist')
         # a windows build creats these folder too ... clear them
-        scriptBuild = os.path.join('autoProcessTV','build')
-        scriptDist = os.path.join('autoProcessTV','dist')
+        scriptBuild = os.path.join('autoProcessTV', 'build')
+        scriptDist = os.path.join('autoProcessTV', 'dist')
         if os.path.exists(scriptBuild):
             shutil.rmtree(scriptBuild)
         if os.path.exists(scriptDist):
@@ -603,8 +630,10 @@ def main():
     writeChangelog(buildParams)
 
 
-    # os switch
     curFancyLogo = ""
+
+
+    # os switch
     if buildParams['osName'] == 'OSX':
         result = buildOSX(buildParams)
         curFancyLogo = fancyLogoMac()
@@ -624,7 +653,7 @@ def main():
         if os.path.exists(scriptBuild):
             shutil.rmtree(scriptBuild)
         print curFancyLogo
-        print 
+        print
         print "########################################"
         print "Build SUCCESSFUL !!"
         print "########################################"
