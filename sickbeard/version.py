@@ -1,1 +1,1 @@
-SICKBEARD_VERSION = "master 489"
+SICKBEARD_VERSION = "master"
