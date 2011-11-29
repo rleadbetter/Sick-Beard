@@ -159,21 +159,32 @@ class BinaryUpdateManager(UpdateManager):
                     only the build number. default: False
         """
         
+        logger.log(u"Update check url: "+self.gc_url+"&branch="+self._cur_branch, logger.DEBUG)
         svnFile = urllib.urlopen(self.gc_url+"&branch="+self._cur_branch)
         lines = svnFile.readlines()
         if len(lines) == 1:
             result = json.loads(lines[0])
+            #TODO make a single function for the link and dont sent a string at on point and a tuple at another
             if whole_link:
-                return result['link']
-            else:
-                if result['day'] != "00":
-                    humanVersion = str(result['year'])+"."+str(result['month'])+"."+str(result['day'])
+                if 'link' in result:
+                    return result['link']
                 else:
-                    humanVersion = str(result['year'])+"."+str(result['month'])
-                    
-                return (int(result['year']+result['month']+result['day']), humanVersion)
+                    logger.log("link was not set in update response. update will fail", logger.WARNING)
+                    return None
+            
+            for field in ('year','month','day'):
+                if not field in result:
+                    logger.log(field+" was not set in update response. setting version to 0", logger.WARNING)
+                    return 0, "unknown"
         
-        return None
+            if result['day'] != "00": # hide zero day for humans
+                humanVersion = str(result['year'])+"."+str(result['month'])+"."+str(result['day'])
+            else:
+                humanVersion = str(result['year'])+"."+str(result['month'])
+                
+            return int(result['year']+result['month']+result['day']), humanVersion
+            
+        return 0, "unknown" 
 
 class WindowsUpdateManager(BinaryUpdateManager):
 
