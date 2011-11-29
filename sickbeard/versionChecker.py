@@ -159,6 +159,7 @@ class BinaryUpdateManager(UpdateManager):
                     only the build number. default: False
         """
         
+        logger.log(u"Update check url: "+self.gc_url+"&branch="+self._cur_branch, logger.DEBUG)
         svnFile = urllib.urlopen(self.gc_url+"&branch="+self._cur_branch)
         lines = svnFile.readlines()
         if len(lines) == 1:
@@ -173,7 +174,7 @@ class BinaryUpdateManager(UpdateManager):
                     
                 return (int(result['year']+result['month']+result['day']), humanVersion)
         
-        return None
+        return 0, "unknown" 
 
 class WindowsUpdateManager(BinaryUpdateManager):
 
