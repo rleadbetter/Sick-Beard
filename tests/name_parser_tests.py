@@ -11,7 +11,7 @@ import sickbeard
 sickbeard.SYS_ENCODING = 'UTF-8'
 
 
-DEBUG = VERBOSE = True
+DEBUG = VERBOSE = False
 
 
 simple_test_cases = {
@@ -120,6 +120,10 @@ simple_test_cases = {
               '[UTW]_Fractal_-_01_[h264-720p][96D3F1BF]': parser.ParseResult(None, 'Fractal', None, [], 'h264-720p', 'UTW', None, [1]),
               
                },
+               'anime_ep_name':{
+               '[TzaTziki]_One_Piece_279_Chopper_Man_1_[720p][8AE5F25D]': parser.ParseResult(None, 'One Piece', None, [], '720p', 'TzaTziki', None, [279]),
+               "[ACX]Wolf's_Rain_-_04_-_Scars_in_the_Wasteland_[octavarium]_[82B7E357]": parser.ParseResult(None, "Wolf's Rain", None, [], 'octavarium', 'ACX', None, [4])
+              },
               
               "anime_standard_round": {
               '[SGKK] Bleach - 312v2 (1280x720 h264 AAC) [F501C9BE]': parser.ParseResult(None, 'Bleach', None, [], '1280x720 h264 AAC', 'SGKK', None, [312]),
@@ -170,6 +174,7 @@ simple_test_cases = {
               'Naruto Shippuden - 314v2': parser.ParseResult(None, 'Naruto Shippuden', None, [], None, None, None, [314]),
               'Blue Submarine No. 6 104-105': parser.ParseResult(None, 'Blue Submarine No. 6', None, [], None, None, None, [104,105]),
               'Samurai X: Trust & Betrayal (OVA) 001-002': parser.ParseResult(None, 'Samurai X: Trust & Betrayal (OVA)', None, [], None, None, None, [1,2]),
+              "[ACX]_Wolf's_Spirit_001.mkv": parser.ParseResult(None, "Wolf's Spirit", None, [], None, 'ACX', None, [1])
               }
               
               }
@@ -348,6 +353,10 @@ class BasicTests(unittest.TestCase):
     def test_anime_ultimate(self):
         np = parser.NameParser(False,parser.NameParser.ANIME_REGEX)
         self._test_names(np, 'anime_ultimate',verbose=False)
+
+    def test_anime_ep_name(self):
+        np = parser.NameParser(False,parser.NameParser.ANIME_REGEX)
+        self._test_names(np, 'anime_ep_name',verbose=False)
         
     def test_anime_slash(self):
         np = parser.NameParser(False,parser.NameParser.ANIME_REGEX)
@@ -371,7 +380,7 @@ class BasicTests(unittest.TestCase):
 
     def test_anime_bare(self):
         np = parser.NameParser(False,parser.NameParser.ANIME_REGEX)
-        self._test_names(np, 'anime_bare',verbose=False)
+        self._test_names(np, 'anime_bare',verbose=True)
     
     def test_standard_file_names(self):
         np = parser.NameParser()

@@ -1,5 +1,6 @@
 import unittest
 
+import test_lib
 import sys, os.path
 sys.path.append(os.path.abspath('..'))
 
@@ -10,10 +11,11 @@ from sickbeard import db
 from sickbeard.databases import cache_db
 
 class Show:
-    def __init__(self, name, tvdbid, tvrname):
+    def __init__(self, name, tvdbid, tvrname, anime=False):
         self.name = name
         self.tvdbid = tvdbid
         self.tvrname = tvrname
+        self.is_anime = anime
 
 class SceneTests(unittest.TestCase):
     
