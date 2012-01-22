@@ -203,7 +203,8 @@ def buildWIN(buildParams):
                              'packages': ['Cheetah'],
                              'excludes': ['Tkconstants', 'Tkinter', 'tcl'],
                              'optimize': 2,
-                             'compressed': 0
+                             'compressed': 0,
+                             'skip_archive': True
                             }
                          }
     options['zipfile'] = 'lib/sickbeard.zip'
@@ -240,6 +241,20 @@ def buildWIN(buildParams):
     # compile sickbeard.exe
     setup(**options)
 
+    # copy xml files used by adba
+    
+    print
+    print "########################################"
+    print "Copy Files adba xml"
+    print "########################################"
+    adba_xml_files = ['lib/adba/anime-list.xml',
+                      'lib/adba/animetitles.xml']
+    
+    for curFile in adba_xml_files:
+        newFile = os.path.join(os.path.normpath('dist/lib'), os.path.normpath(curFile))
+        print "Copying file from", curFile, "to", newFile
+        shutil.copy(curFile, newFile)
+
     # compile sabToSickbeard.exe using the existing setup.py script
 
     auto_process_dir = 'autoProcessTV'
@@ -256,7 +271,7 @@ def buildWIN(buildParams):
 
     print
     print "########################################"
-    print "Copy Files"
+    print "Copy Files Auto process"
     print "########################################"
     for curFile in auto_process_files:
         newFile = os.path.join('dist', curFile)
