@@ -119,8 +119,8 @@ class BinaryUpdateManager(UpdateManager):
         self._newest_version = None
         self._newest_versionRaw = None
         
-        self.gc_url = 'http://sickbeard.hostingsociety.com/latest.php'
-        self.gc_url_human = 'http://sickbeard.hostingsociety.com/'
+        self.gc_url = 'http://sickbeard.lad1337.de/latest.php'
+        self.gc_url_human = 'http://sickbeard.lad1337.de/'
 
     def need_update(self):
         self._cur_version, self._cur_branch = self._find_installed_version()
@@ -191,7 +191,7 @@ class WindowsUpdateManager(BinaryUpdateManager):
     def __init__(self):
         BinaryUpdateManager.__init__(self)
         
-        self.gc_url = 'http://sickbeard.hostingsociety.com/latest.php?os=win'
+        self.gc_url = 'http://sickbeard.lad1337.de/latest.php?os=win'
 
 
     def update(self):
@@ -246,7 +246,7 @@ class MacUpdateManager(BinaryUpdateManager):
     def __init__(self):
         BinaryUpdateManager.__init__(self)
 
-        self.gc_url = 'http://sickbeard.hostingsociety.com/latest.php?os=mac'
+        self.gc_url = 'http://sickbeard.lad1337.de/latest.php?os=mac'
 
     def update(self):
 
