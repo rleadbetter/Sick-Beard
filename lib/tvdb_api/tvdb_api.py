@@ -474,7 +474,7 @@ class Tvdb:
 
         # The following url_ configs are based of the
         # http://thetvdb.com/wiki/index.php/Programmers_API
-        self.config['base_url'] = "http://www.thetvdb.com"
+        self.config['base_url'] = "http://thexem.de/proxy/tvdb/scene"
 
         if self.config['search_all_languages']:
             self.config['url_getSeries'] = "%(base_url)s/api/GetSeries.php?seriesname=%%s&language=all" % self.config
@@ -535,6 +535,7 @@ class Tvdb:
     def _getetsrc(self, url):
         """Loads a URL using caching, returns an ElementTree of the source
         """
+        print url
         src = self._loadUrl(url)
         try:
             return ElementTree.fromstring(src.rstrip('\r'))
