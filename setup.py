@@ -19,7 +19,7 @@ from subprocess import call, Popen
 import urllib, ConfigParser
 from distutils.core import setup
 import zipfile, fnmatch
-from lib.pygithub import github
+import sickbeard.gh_api as github
 
 
 ######################
@@ -49,11 +49,17 @@ def writeSickbeardVersionFile(version):
     content = '%s = "%s"\n' % (sbVersionVarName, version)
     # write
     writeSickbeardVersionFileRaw(content)
+    
+    return (content == readSickbeardVersionFile())
+    #TODO: this does not work any more ... i dont know why the contens is correct but the import is always the wrong version
+    # re starting this script works ... so the version.py does not seam updated in a python way
+    # but i also tried compiling it gain befor importing it no success ... so we only check the contens for now :(
     # now lets try to import the written file
     from sickbeard.version import SICKBEARD_VERSION
     if SICKBEARD_VERSION == version:
         return True
     else:
+        print "imported SICKBEARD_VERSION: '"+SICKBEARD_VERSION+"' ...",
         return False
 
 def writeSickbeardVersionFileRaw(content):
@@ -66,6 +72,7 @@ def writeSickbeardVersionFileRaw(content):
 def readSickbeardVersionFile():
     versionFile = open(os.path.join("sickbeard", "version.py"), "r+")
     content = versionFile.read()
+    versionFile.close()
     return content
 
 def getNiceOSString(buildParams):
@@ -79,9 +86,9 @@ def getNiceOSString(buildParams):
 def getLatestCommitID(buildParams):
     gh = github.GitHub()
     newestCommit = ""
-    for curCommit in gh.commits.forBranch('SickBeard-Team', 'SickBeard'):
+    for curCommit in gh.commits('SickBeard-Team', 'SickBeard'):
         if newestCommit == "":
-            longID = curCommit.id
+            longID = curCommit['sha']
             shortID = longID[:6]
             return (longID, shortID)
 
@@ -103,11 +110,11 @@ def writeChangelog(buildParams):
     changeString = ""
 
     # cycle through all the git commits and save their commit messages
-    for curCommit in gh.commits.forBranch('SickBeard-Team', 'SickBeard'):
-        if curCommit.id == lastCommit:
+    for curCommit in gh.commits('lad1337', 'Sick-Beard', buildParams['currentBranch']):
+        if curCommit['sha'] == lastCommit:
             break
-        curID = curCommit.id
-        changeString += "#### %s ####\n%s\n" % (curID[:6], curCommit.message)
+        curID = curCommit['sha']
+        changeString += "#### %s (%s) ####\n%s\n############################################\n\n" % (curID[:6], curCommit['commit']['committer']['date'], curCommit['commit']['message'])
 
     # if we didn't find any changes don't make a changelog file
     if buildParams['gitNewestCommit'] != "":
@@ -575,6 +582,9 @@ def main():
     buildParams['gitNewestCommit'], buildParams['gitNewestCommitShort'] = getLatestCommitID(buildParams)
     if not buildParams['branch']:
         buildParams['branch'] = getBranch(buildParams)
+        buildParams['currentBranch'] = buildParams['branch']
+    else:
+        buildParams['currentBranch'] = getBranch(buildParams)
 
     # this is the 'branch yy.mm(.dd)' string
     buildParams['build'] = "%s %s" % (buildParams['branch'], buildParams['dateVersion'])
@@ -589,7 +599,7 @@ def main():
     oldSickbeardVersionFile = readSickbeardVersionFile()
     if not oldSickbeardVersionFile:
         print "ERROR"
-        print "seams like reading the verision.py file failed. permissions ?"
+        print "seams like reading the version.py file failed. permissions ?"
         exit(1)
     else:
         print "ok"
@@ -606,6 +616,8 @@ def main():
     buildParams['packageName'] = buildParams['packageName'].replace(" ","-")
     #####################
     # clean the build dirs
+    scriptBuild = None
+    scriptDist = None
     if not buildParams['test']:
         print "Removing old build dirs ...",
         # remove old build stuff
@@ -650,7 +662,7 @@ def main():
         # remove the temp build dirs
         if os.path.exists('build'):
             shutil.rmtree('build')
-        if os.path.exists(scriptBuild):
+        if scriptBuild and os.path.exists(scriptBuild):
             shutil.rmtree(scriptBuild)
         print curFancyLogo
         print
