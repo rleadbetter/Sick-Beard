@@ -280,7 +280,7 @@ class QueueItemAdd(ShowQueueItem):
             logger.log(traceback.format_exc(), logger.DEBUG)
 
         try:
-            self.show.loadEpisodesFromTVDB()
+            self.show.loadEpisodesFromTVDB(initialLoad=True)
             self.show.setTVRID()
 
             self.show.writeMetadata()
@@ -308,6 +308,8 @@ class QueueItemAdd(ShowQueueItem):
             sickbeard.backlogSearchScheduler.action.searchBacklog([self.show]) #@UndefinedVariable
 
         self.show.flushEpisodes()
+
+        sickbeard.showQueueScheduler.action.refreshShow(self.show, True) #@UndefinedVariable
 
         self.finish()
 

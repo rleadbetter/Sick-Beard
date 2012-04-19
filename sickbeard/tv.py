@@ -264,7 +264,61 @@ class TVShow(object):
         return scannedEps
 
 
-    def loadEpisodesFromTVDB(self, cache=True):
+    def loadEpisodesFromTVDB(self, cache=True, initialLoad=False):
+
+        # this just does some very basic stuff and add the episodes to the database without the orm
+        def inital():
+            ep = showObj[season][episode]
+            #TODO: this airdate think was stolen from the load from db function ... this should be made into a "global" helper to not repeat code
+            if not ep["firstaired"]:
+                ep["firstaired"] = str(datetime.date.fromordinal(1))
+            rawAirdate = [int(x) for x in ep["firstaired"].split("-")]
+            try:
+                airdate = datetime.date(rawAirdate[0], rawAirdate[1], rawAirdate[2])
+            except ValueError:
+                logger.log(u"Malformed air date retrieved from TVDB (" + str(season) + "x" + str(episode) + ")", logger.ERROR)
+                return
+            status = sickbeard.STATUS_DEFAULT
+            if airdate >= datetime.date.today():
+                status = UNAIRED
+            elif airdate == datetime.date.fromordinal(1):
+                #logger.log(u"Episode has no air date, automatically marking it skipped", logger.DEBUG)
+                status = SKIPPED
+            newValueDict = {"tvdbid": int(ep['id']),
+                            "name": ep['episodename'],
+                            "description": ep['overview'],
+                            "airdate": airdate.toordinal(),
+                            "hasnfo": 0,
+                            "hastbn": 0,
+                            "status": status,
+                            "location": ''}
+            controlValueDict = {"showid": self.tvdbid,
+                                "season": season,
+                                "episode": episode}
+
+            # use a custom update/insert method to get the data into the DB
+            myDB.upsert("tv_episodes", newValueDict, controlValueDict)
+
+        # does the whole episode orm thing
+        def standard():
+            try:
+                #ep = TVEpisode(self, season, episode)
+                ep = self.getEpisode(season, episode)
+            except exceptions.EpisodeNotFoundException:
+                logger.log(str(self.tvdbid) + ": TVDB object for " + str(season) + "x" + str(episode) + " is incomplete, skipping this episode")
+                return
+            else:
+                try:
+                    ep.loadFromTVDB(tvapi=t)
+                except exceptions.EpisodeDeletedException:
+                    logger.log(u"The episode was deleted, skipping the rest of the load")
+                    return
+
+            with ep.lock:
+                logger.log(str(self.tvdbid) + ": Loading info from theTVDB for episode " + str(season) + "x" + str(episode), logger.DEBUG)
+                ep.loadFromTVDB(season, episode, tvapi=t)
+                if ep.dirty:
+                    ep.saveToDB()
 
         # There's gotta be a better way of doing this but we don't wanna
         # change the cache value elsewhere
@@ -287,30 +341,20 @@ class TVShow(object):
 
         scannedEps = {}
 
+        processFunction = standard
+        if initialLoad:
+            processFunction = inital
+            myDB = db.DBConnection()
+            logger.log(str(self.tvdbid) + ": Using initial (quick) method")
+
         for season in showObj:
             scannedEps[season] = {}
             for episode in showObj[season]:
                 # need some examples of wtf episode 0 means to decide if we want it or not
                 if episode == 0:
                     continue
-                try:
-                    #ep = TVEpisode(self, season, episode)
-                    ep = self.getEpisode(season, episode)
-                except exceptions.EpisodeNotFoundException:
-                    logger.log(str(self.tvdbid) + ": TVDB object for " + str(season) + "x" + str(episode) + " is incomplete, skipping this episode")
-                    continue
-                else:
-                    try:
-                        ep.loadFromTVDB(tvapi=t)
-                    except exceptions.EpisodeDeletedException:
-                        logger.log(u"The episode was deleted, skipping the rest of the load")
-                        continue
 
-                with ep.lock:
-                    logger.log(str(self.tvdbid) + ": Loading info from theTVDB for episode " + str(season) + "x" + str(episode), logger.DEBUG)
-                    ep.loadFromTVDB(season, episode, tvapi=t)
-                    if ep.dirty:
-                        ep.saveToDB()
+                processFunction()
 
                 scannedEps[season][episode] = True
 
