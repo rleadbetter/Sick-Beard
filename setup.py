@@ -106,21 +106,21 @@ def writeChangelog(buildParams):
     # start building the CHANGELOG.txt
     print 'Creating / writing changelog'
     gh = github.GitHub()
-    lastCommit = ""
-    changeString = ""
+    lastCommit = u""
+    changeString = u""
 
     # cycle through all the git commits and save their commit messages
     for curCommit in gh.commits('lad1337', 'Sick-Beard', buildParams['currentBranch']):
         if curCommit['sha'] == lastCommit:
             break
         curID = curCommit['sha']
-        changeString += "#### %s (%s) ####\n%s\n############################################\n\n" % (curID[:6], curCommit['commit']['committer']['date'], curCommit['commit']['message'])
+        changeString += u"#### %s (%s) ####\n%s\n############################################\n\n" % (curID[:6], curCommit['commit']['committer']['date'], curCommit['commit']['message'])
 
     # if we didn't find any changes don't make a changelog file
     if buildParams['gitNewestCommit'] != "":
         newChangelog = open(os.path.join('dist', "CHANGELOG.txt"), "w")
-        newChangelog.write("Changelog for build " + str(buildParams['build']) + " (" + buildParams['gitNewestCommit'] + ")\n\n")
-        newChangelog.write(changeString)
+        newChangelog.write(u"Changelog for build " + str(buildParams['build']) + " (" + buildParams['gitNewestCommit'] + ")\n\n")
+        newChangelog.write(changeString.encode('utf8'))
         newChangelog.close()
         print "changelog writen"
     else:
