@@ -417,6 +417,16 @@ class PostProcessor(object):
             scene_id = scene_exceptions.get_scene_exception_by_name(cur_name)
             if scene_id:
                 self._log(u"Scene exception lookup got tvdb id "+str(scene_id)+u", using that", logger.DEBUG)
+                if(parse_result.is_anime):
+                    show = helpers.findCertainShow(sickbeard.showList, scene_id)
+                    try:
+                        (actual_season, actual_episodes) = helpers.get_all_episodes_from_absolute_number(show, None, parse_result.ab_episode_numbers)
+                    except exceptions.EpisodeNotFoundByAbsoluteNumerException:
+                        logger.log(str(scene_id) + ": TVDB object absolute number " + str(parse_result.ab_episode_numbers) + " is incomplete, cant determin season and episode numbers")
+                    else:
+                        season = actual_season
+                        episodes = actual_episodes
+
                 _finalize(parse_result)
                 return (scene_id, season, episodes)
 
@@ -426,7 +436,7 @@ class PostProcessor(object):
             db_result = helpers.searchDBForShow(cur_name)
             if db_result:
                 tvdb_id = int(db_result[0])
-                self._log(u"Lookup successful, using tvdb id "+str(tvdb_id)+" season: "+str(season)+" episode: "+str(episodes), logger.DEBUG)  
+                self._log(u"Lookup successful(1), using tvdb id "+str(tvdb_id)+" season: "+str(season)+" episode: "+str(episodes), logger.DEBUG)  
                 show = helpers.findCertainShow(sickbeard.showList, tvdb_id)
                 if show.is_anime and len(parse_result.ab_episode_numbers) > 0:
                     try:
@@ -437,7 +447,10 @@ class PostProcessor(object):
                     
                     _finalize(parse_result)
                     return (tvdb_id, actual_season, actual_episodes)
-                
+                else:
+                    _finalize(parse_result)
+                    return (tvdb_id, season, episodes)
+                    
         # see if we can find the name with a TVDB lookup
         for cur_name in name_list:
             try:
@@ -463,7 +476,7 @@ class PostProcessor(object):
             except (IOError):
                 continue
             tvdb_id = int(showObj["id"])
-            self._log(u"Lookup successful, using tvdb id "+str(tvdb_id), logger.DEBUG)
+            self._log(u"Lookup successful(2), using tvdb id "+str(tvdb_id), logger.DEBUG)
             show = helpers.findCertainShow(sickbeard.showList, tvdb_id)
             if show.is_anime and len(parse_result.ab_episode_numbers) > 0:
                 try:
