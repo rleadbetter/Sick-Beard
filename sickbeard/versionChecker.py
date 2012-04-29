@@ -247,7 +247,7 @@ class GitUpdateManager(UpdateManager):
                 logger.log(u"Command "+cmd+" didn't work, couldn't find git.")
                 continue
             
-            if 'not found' in output or "not recognized as an internal or external command" in output:
+            if p.returncode != 0 or 'not found' in output or "not recognized as an internal or external command" in output:
                 logger.log(u"Unable to find git with command "+cmd, logger.DEBUG)
                 output = None
             elif 'fatal:' in output or err:
@@ -286,7 +286,14 @@ class GitUpdateManager(UpdateManager):
 
     def _find_git_branch(self):
 
-        return self._run_git('symbolic-ref -q HEAD')[0].strip().replace('refs/heads/', '', 1) or 'master'
+        branch_info = self._run_git('symbolic-ref -q HEAD')
+
+        if not branch_info or not branch_info[0]:
+            return 'master'
+
+        branch = branch_info[0].strip().replace('refs/heads/', '', 1)
+
+        return branch or 'master'
 
 
     def _check_github_for_update(self):
