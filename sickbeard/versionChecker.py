@@ -23,9 +23,14 @@ from sickbeard import scene_exceptions
 from sickbeard.exceptions import ex
 
 import os, platform, shutil
-import subprocess, re, json
+import subprocess, re
 import urllib, urllib2
 import zipfile, tarfile
+
+try:
+    import json
+except ImportError:
+    from lib import simplejson as json
 
 from urllib2 import URLError
 import gh_api as github
