@@ -68,7 +68,7 @@ class NewznabProvider(generic.NZBProvider):
 	def isEnabled(self):
 		return self.enabled
 
-	def _get_season_search_strings(self, show, season=None):
+	def _get_season_search_strings(self, show, season=None, scene=False):
 
 		if not show:
 			return [{}]
@@ -76,7 +76,8 @@ class NewznabProvider(generic.NZBProvider):
 		to_return = []
 
 		# add new query strings for exceptions
-		name_exceptions = scene_exceptions.get_scene_exceptions(show.tvdbid) + [show.name]
+		name_exceptions = scene_exceptions.get_scene_exceptions(show.tvdbid, season) + [show.name]
+		name_exceptions = set(name_exceptions)
 		for cur_exception in name_exceptions:
 		
 			cur_params = {}
@@ -86,7 +87,7 @@ class NewznabProvider(generic.NZBProvider):
 				cur_params['rid'] = show.tvrid
 			# if we can't then fall back on a very basic name search
 			else:
-				cur_params['q'] = sanitizeSceneName(cur_exception)
+				cur_params['q'] = sanitizeSceneName(cur_exception).replace('.', '_')
 	
 			if season != None:
 				# air-by-date means &season=2010&q=2010.03, no other way to do it atm
@@ -117,7 +118,7 @@ class NewznabProvider(generic.NZBProvider):
 			params['rid'] = ep_obj.show.tvrid
 		# if we can't then fall back on a very basic name search
 		else:
-			params['q'] = sanitizeSceneName(ep_obj.show.name)
+			params['q'] = sanitizeSceneName(ep_obj.show.name).replace('.', '_')
 
 		if ep_obj.show.air_by_date:
 			date_str = str(ep_obj.airdate)
@@ -125,8 +126,8 @@ class NewznabProvider(generic.NZBProvider):
 			params['season'] = date_str.partition('-')[0]
 			params['ep'] = date_str.partition('-')[2].replace('-','/')
 		else:
-			params['season'] = ep_obj.season
-			params['ep'] = ep_obj.episode
+			params['season'] = ep_obj.scene_season
+			params['ep'] = ep_obj.scene_episode
 
 		to_return = [params]
 
@@ -142,7 +143,7 @@ class NewznabProvider(generic.NZBProvider):
 					continue
 
 				cur_return = params.copy()
-				cur_return['q'] = sanitizeSceneName(cur_exception)
+				cur_return['q'] = sanitizeSceneName(cur_exception).replace('.', '_')
 				to_return.append(cur_return)
 
 		return to_return

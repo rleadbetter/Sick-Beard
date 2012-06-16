@@ -71,6 +71,7 @@ def setSickbeardGlobals():
     sickbeard.QUALITY_DEFAULT = 4
     sickbeard.SEASON_FOLDERS_DEFAULT = 1
     sickbeard.SEASON_FOLDERS_FORMAT = 'Season %02d'
+    sickbeard.RENAME_EPISODES = True
     
     sickbeard.NAMING_SHOW_NAME = 1
     sickbeard.NAMING_EP_NAME = 1
@@ -118,9 +119,12 @@ class SickbeardTestDBCase(unittest.TestCase):
         setUp_test_episode_file()
         setUp_test_show_dir()
         
-        logger.log("##############################", logger.DEBUG)
+        logger.log("############################################################", logger.DEBUG)
         logger.log("     SET UP DONE", logger.DEBUG)
-        logger.log("##############################", logger.DEBUG)
+        logger.log("############################################################", logger.DEBUG)
+        logger.log("     Running test " + self.id(), logger.DEBUG)
+        logger.log("############################################################", logger.DEBUG)
+        
 
     def tearDown(self):
         tearDown_test_db()
@@ -180,9 +184,9 @@ sickbeard.tvcache.CacheDBConnection = TestCacheDBConnection
 def setUp_test_db():
     """upgrades the db to the latest version
     """
-    logger.log("##############################", logger.DEBUG)
+    logger.log("############################################################", logger.DEBUG)
     logger.log("     SETINGUP DB", logger.DEBUG)
-    logger.log("##############################", logger.DEBUG)
+    logger.log("############################################################", logger.DEBUG)
 
     # upgrading the db
     db.upgradeDatabase(db.DBConnection(), mainDB.InitialSchema)
@@ -199,16 +203,20 @@ def tearDown_test_db():
     """
     # uncomment next line so leave the db intact beween test and at the end
     #return False
-    logger.log("##############################", logger.DEBUG)
+    logger.log("############################################################", logger.DEBUG)
     logger.log("     REMOVING DB", logger.DEBUG)
-    logger.log("##############################", logger.DEBUG)
+    logger.log("############################################################", logger.DEBUG)
 
     if os.path.exists(os.path.join(TESTDIR, TESTDBNAME)):
         os.remove(os.path.join(TESTDIR, TESTDBNAME))
     if os.path.exists(os.path.join(TESTDIR, TESTCACHEDBNAME)):
         os.remove(os.path.join(TESTDIR, TESTCACHEDBNAME))
 
+
 def setUp_test_episode_file(fileDir=FILEDIR, fileName=FILENAME):
+    if not fileDir is FILEDIR:
+        fileDir = os.path.join(TESTDIR, "complete", fileName)
+
     if not os.path.exists(fileDir):
         os.makedirs(fileDir)
 
@@ -217,15 +225,22 @@ def setUp_test_episode_file(fileDir=FILEDIR, fileName=FILENAME):
     f = open(filePath, "w")
     f.write("foo bar. some fake content")
     f.close()
+    return filePath
 
 
 def tearDown_test_episode_file(fileDir=FILEDIR):
-    shutil.rmtree(FILEDIR)
+    if os.path.isdir(fileDir):
+        shutil.rmtree(FILEDIR)
 
 
 def setUp_test_show_dir(showDir=SHOWDIR):
+    if not showDir is SHOWDIR:
+        showDir = os.path.join(TESTDIR, "shows", showDir)
+
     if not os.path.exists(showDir):
         os.makedirs(showDir)
+
+    return showDir
 
 
 def tearDown_test_show_dir(showDir=SHOWDIR):
