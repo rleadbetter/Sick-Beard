@@ -30,7 +30,7 @@ from threading import Lock
 
 # apparently py2exe won't build these unless they're imported somewhere
 from sickbeard import providers, metadata
-from providers import ezrss, tvtorrents, btn, nzbmatrix, nzbsrus, newznab, womble, newzbin, nzbs_org_old, fanzub
+from providers import ezrss, tvtorrents, btn, nzbmatrix, nzbsrus, newznab, womble, newzbin, nzbs_org_old, fanzub, nyaa
 
 from sickbeard import searchCurrent, searchBacklog, showUpdater, versionChecker, properFinder, autoPostProcesser
 from sickbeard import helpers, db, exceptions, show_queue, search_queue, scheduler
@@ -191,6 +191,7 @@ NEWZBIN_USERNAME = None
 NEWZBIN_PASSWORD = None
 
 FANZUB = False
+NYAA = False
 
 SAB_USERNAME = None
 SAB_PASSWORD = None
@@ -425,7 +426,7 @@ def initialize(consoleLogging=True):
                 USE_PUSHOVER, PUSHOVER_USERKEY, PUSHOVER_NOTIFY_ONDOWNLOAD, PUSHOVER_NOTIFY_ONSNATCH, \
                 USE_LIBNOTIFY, LIBNOTIFY_NOTIFY_ONSNATCH, LIBNOTIFY_NOTIFY_ONDOWNLOAD, USE_NMJ, NMJ_HOST, NMJ_DATABASE, NMJ_MOUNT, USE_SYNOINDEX, \
                 USE_BANNER, USE_LISTVIEW, METADATA_XBMC, METADATA_MEDIABROWSER, METADATA_PS3, METADATA_SYNOLOGY, metadata_provider_dict, \
-                NEWZBIN, NEWZBIN_USERNAME, NEWZBIN_PASSWORD,FANZUB, GIT_PATH, MOVE_ASSOCIATED_FILES, \
+                NEWZBIN, NEWZBIN_USERNAME, NEWZBIN_PASSWORD,FANZUB, NYAA, GIT_PATH, MOVE_ASSOCIATED_FILES, \
                 COMING_EPS_LAYOUT, COMING_EPS_SORT, COMING_EPS_DISPLAY_PAUSED, METADATA_WDTV, METADATA_TIVO, IGNORE_WORDS, \
                 ANIMESUPPORT, USE_ANIDB, ANIDB_USERNAME, ANIDB_PASSWORD, ANIDB_USE_MYLIST, ANIME_SPLIT_HOME, CREATE_MISSING_SHOW_DIRS, \
                 ADD_SHOWS_WO_DIR, SYS_ENCODING, _CONFIG_SYS_ENCODING
@@ -594,6 +595,8 @@ def initialize(consoleLogging=True):
         NEWZBIN_PASSWORD = check_setting_str(CFG, 'Newzbin', 'newzbin_password', '')
 
         FANZUB = bool(check_setting_int(CFG, 'Fanzub', 'fanzub', 1))
+        
+        NYAA = bool(check_setting_int(CFG, 'Nyaa', 'nyaa', 1))
 
         WOMBLE = bool(check_setting_int(CFG, 'Womble', 'womble', 1))
 
@@ -1146,6 +1149,9 @@ def save_config():
     
     new_config['Fanzub'] = {}
     new_config['Fanzub']['fanzub'] = int(FANZUB)
+    
+    new_config['Nyaa'] = {}
+    new_config['Nyaa']['nyaa'] = int(NYAA)
 
     new_config['Womble'] = {}
     new_config['Womble']['womble'] = int(WOMBLE)

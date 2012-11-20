@@ -1213,6 +1213,8 @@ class ConfigProviders:
                 sickbeard.TVTORRENTS = curEnabled
             elif curProvider == 'fanzub':
                 sickbeard.FANZUB = curEnabled
+            elif curProvider == 'nyaa':
+                sickbeard.NYAA = curEnabled                
             elif curProvider == 'btn':
                 sickbeard.BTN = curEnabled
             elif curProvider in newznabProviderDict:
