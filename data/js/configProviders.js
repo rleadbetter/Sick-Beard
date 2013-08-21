@@ -13,7 +13,7 @@ $(document).ready(function(){
         });
     } 
 
-    $.fn.addProvider = function (id, name, url, key, isDefault, showProvider) {
+    $.fn.addProvider = function (id, name, url, key, isDefault) {
 
         if (url.match('/$') == null)
             url = url + '/'
@@ -27,7 +27,7 @@ $(document).ready(function(){
             $(this).populateNewznabSection();
         }
 
-        if ($('#provider_order_list > #'+id).length == 0 && showProvider != false) {
+        if ($('#provider_order_list > #'+id).length == 0) {
             var toAdd = '<li class="ui-state-default" id="'+id+'"> <input type="checkbox" id="enable_'+id+'" class="provider_enabler" CHECKED> <a href="'+url+'" class="imgLink" target="_new"><img src="'+sbRoot+'/images/providers/newznab.gif" alt="'+name+'" width="16" height="16"></a> '+name+'</li>'
 
             $('#provider_order_list').append(toAdd);
@@ -35,6 +35,25 @@ $(document).ready(function(){
         }
 
         $(this).makeNewznabProviderString();
+
+    }
+    
+    $.fn.addAnyRssProvider = function (id, name, url) {
+
+        var newData = [name, url];
+        anyrssProviders[id] = newData;
+
+        $('#editAAnyRssProvider').addOption(id, name);
+        $(this).populateAnyRssSection();
+
+        if ($('#provider_order_list > #'+id).length == 0) {
+            var toAdd = '<li class="ui-state-default" id="'+id+'"> <input type="checkbox" id="enable_'+id+'" class="provider_enabler" CHECKED> <a href="'+url+'" class="imgLink" target="_new"><img src="'+sbRoot+'/images/providers/anyrss.png" alt="'+name+'" width="16" height="16"></a> '+name+'</li>'
+
+            $('#provider_order_list').append(toAdd);
+            $('#provider_order_list').sortable("refresh");
+        }
+
+        $(this).makeAnyRssProviderString();
 
     }
 
@@ -59,6 +78,20 @@ $(document).ready(function(){
 
         $(this).makeNewznabProviderString();
 
+    }
+    
+    $.fn.updateAnyRssProvider = function (id, url) {
+        anyrssProviders[id][1] = url;
+        $(this).populateAnyRssSection();
+        $(this).makeAnyRssProviderString();
+    }
+
+    $.fn.deleteAnyRssProvider = function (id) {
+        $('#editAAnyRssProvider').removeOption(id);
+        delete anyrssProviders[id];
+        $(this).populateAnyRssSection();
+        $('#provider_order_list > #'+id).remove();
+        $(this).makeAnyRssProviderString();
     }
 
     $.fn.populateNewznabSection = function() {
@@ -111,6 +144,47 @@ $(document).ready(function(){
 
     }
     
+    
+    $.fn.populateAnyRssSection = function() {
+
+        var selectedProvider = $('#editAAnyRssProvider :selected').val();
+
+        if (selectedProvider == 'addAnyRss') {
+            var data = ['',''];
+            $('#anyrss_add_div').show();
+            $('#anyrss_update_div').hide();
+        } else {
+            var data = anyrssProviders[selectedProvider];
+            $('#anyrss_add_div').hide();
+            $('#anyrss_update_div').show();
+        }
+
+        $('#anyrss_name').val(data[0]);
+        $('#anyrss_url').val(data[1]);
+        
+        if (selectedProvider == 'addAnyRss') {
+            $('#anyrss_name').removeAttr("disabled");
+            $('#anyrss_url').removeAttr("disabled");
+        } else {
+            $('#anyrss_name').attr("disabled", "disabled");
+            $('#anyrss_url').removeAttr("disabled");
+            $('#anyrss_delete').removeAttr("disabled");
+        }
+
+    }
+    
+    $.fn.makeAnyRssProviderString = function() {
+
+        var provStrings = new Array();
+        
+        for (var id in anyrssProviders) {
+            provStrings.push(anyrssProviders[id].join('|||'));
+        }
+
+        $('#anyrss_string').val(provStrings.join('!!!'))
+
+    }
+    
     $.fn.refreshProviderList = function() {
             var idArr = $("#provider_order_list").sortable('toArray');
             var finalArr = new Array();
@@ -123,6 +197,7 @@ $(document).ready(function(){
     }
 
     var newznabProviders = new Array();
+    var anyrssProviders = new Array();
 
     $('.newznab_key').change(function(){
 
@@ -136,9 +211,12 @@ $(document).ready(function(){
 
     });
     
-    $('#newznab_key').change(function(){
+    $('#newznab_key,#newznab_url').change(function(){
         
         var selectedProvider = $('#editANewznabProvider :selected').val();
+
+		if (selectedProvider == "addNewznab")
+			return;
 
         var url = $('#newznab_url').val();
         var key = $('#newznab_key').val();
@@ -147,12 +225,28 @@ $(document).ready(function(){
         
     });
     
+    $('#anyrss_url').change(function(){
+        
+        var selectedProvider = $('#editAAnyRssProvider :selected').val();
+
+		if (selectedProvider == "addAnyRss")
+			return;
+
+        var url = $('#anyrss_url').val();
+        
+        $(this).updateAnyRssProvider(selectedProvider, url);
+    });
+    
     $('#editAProvider').change(function(){
         $(this).showHideProviders();
     });
 
     $('#editANewznabProvider').change(function(){
         $(this).populateNewznabSection();
+    });
+
+    $('#editAAnyRssProvider').change(function(){
+        $(this).populateAnyRssSection();
     });
     
     $('.provider_enabler').live('click', function(){
@@ -190,6 +284,32 @@ $(document).ready(function(){
 
         $(this).deleteProvider(selectedProvider);
 
+    });
+    
+    
+    $('#anyrss_add').click(function(){
+        var selectedProvider = $('#editAANyRssProvider :selected').val();
+        
+        var name = $('#anyrss_name').val();
+        var url = $('#anyrss_url').val();
+        var params = { name: name, url: url }
+        
+        // send to the form with ajax, get a return value
+        $.getJSON(sbRoot + '/config/providers/canAddAnyRssProvider', params,
+            function(data){
+                if (data.error != undefined) {
+                    alert(data.error);
+                    return;
+                }
+
+                $(this).addAnyRssProvider(data.success, name, url);
+        });
+    });
+
+    $('.anyrss_delete').click(function(){
+    
+        var selectedProvider = $('#editAAnyRssProvider :selected').val();
+        $(this).deleteAnyRssProvider(selectedProvider);
     });
 
     // initialization stuff

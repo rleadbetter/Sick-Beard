@@ -163,22 +163,36 @@ class GenericProvider:
     def _verify_download(self, file_name=None):
         """
         Checks the saved file to see if it was actually valid, if not then consider the download a failure.
+        Returns a Boolean
         """
-
-        # primitive verification of torrents, just make sure we didn't get a text file or something
-        if self.providerType == GenericProvider.TORRENT:
-            parser = createParser(file_name)
-            if parser:
-                mime_type = parser._getMimeType()
-                try:
-                    parser.stream._input.close()
-                except:
-                    pass
-                if mime_type != 'application/x-bittorrent':
-                    logger.log(u"Result is not a valid torrent file", logger.WARNING)
+        
+        logger.log(u"Verifying Download %s" % file_name, logger.DEBUG)
+        try:
+            with open(file_name, "rb") as f:
+                magic = f.read(16)
+                if self.is_valid_torrent_data(magic):
+                    return True
+                else:
+                    logger.log("Magic number for %s is neither 'd8:announce' nor 'd12:_info_length', got '%s' instead" % (file_name, magic), logger.WARNING)
+                    #logger.log(f.read())
                     return False
+        except Exception, eparser:
+            logger.log("Failed to read magic numbers from file: "+ex(eparser), logger.ERROR)
+            logger.log(traceback.format_exc(), logger.DEBUG)
+            return False
 
-        return True
+    @classmethod
+    def is_valid_torrent_data(cls, torrent_file_contents):
+        # According to /usr/share/file/magic/archive, the magic number for
+        # torrent files is 
+        #    d8:announce
+        # So instead of messing with buggy parsers (as was done here before)
+        # we just check for this magic instead.
+        # Note that a significant minority of torrents have a not-so-magic of "d12:_info_length",
+        # which while not explicit in the spec is valid bencode and works with Transmission and uTorrent.
+        return torrent_file_contents is not None and \
+            (torrent_file_contents.startswith("d8:announce") or \
+             torrent_file_contents.startswith("d12:_info_length"))
 
     def searchRSS(self):
         self.cache.updateCache()
@@ -357,6 +371,44 @@ class GenericProvider:
         results = self.cache.listPropers(date)
 
         return [classes.Proper(x['name'], x['url'], datetime.datetime.fromtimestamp(x['time'])) for x in results]
+
+
+    # Dictionary of blacklisted torrent urls.  Keys are the url, values are the 
+    # timestamp when it was added
+    url_blacklist = {}
+
+    # How long does an entry stay in the URL_BLACKLIST?
+    URL_BLACKLIST_EXPIRY_SECS = 172800 # 172800 = 2 days
+    
+    @classmethod
+    def urlIsBlacklisted(cls, url):
+        """
+        Check if a url is blacklisted.  
+        @param url: (string)
+        @return: bool 
+        """
+        if url is None:
+            return False
+        if url.startswith('http://extratorrent.com/') or url.startswith('https://extratorrent.com/'):
+            # This site is permanently blacklisted (no direct torrent links, just ads)
+            return True
+        if url in cls.url_blacklist:
+            if time.time() - cls.url_blacklist[url] < cls.URL_BLACKLIST_EXPIRY_SECS:
+                # still blacklisted
+                return True
+            else:
+                # no longer blacklisted, remove it from the list
+                del cls.url_blacklist[url]
+        return False
+    
+    @classmethod
+    def blacklistUrl(cls, url):
+        """
+        Add a url to the blacklist.  It stays there for URL_BLACKLIST_EXPIRY_SECS.
+        @param url: (string) 
+        """
+        if url is not None: 
+            cls.url_blacklist[url] = time.time()
 
 
 class NZBProvider(GenericProvider):

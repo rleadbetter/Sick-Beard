@@ -1,6 +1,6 @@
 #import sickbeard
 #from sickbeard.providers.generic import GenericProvider
-#set global $title="Config - Providers"
+#set global $title="Config - Search Providers"
 #set global $header="Search Providers"
 
 #set global $sbPath="../.."
@@ -11,17 +11,29 @@
 
 <script type="text/javascript" src="$sbRoot/js/configProviders.js"></script>
 <script type="text/javascript" src="$sbRoot/js/config.js"></script>
+#if $sickbeard.USE_NZBS
 <script type="text/javascript" charset="utf-8">
 <!--
 \$(document).ready(function(){
-
-var show_nzb_providers = #if $sickbeard.USE_NZBS then "true" else "false"#;
 #for $curNewznabProvider in $sickbeard.newznabProviderList:
-\$(this).addProvider('$curNewznabProvider.getID()', '$curNewznabProvider.name', '$curNewznabProvider.url', '$curNewznabProvider.key', $int($curNewznabProvider.default), show_nzb_providers);
+    \$(this).addProvider('$curNewznabProvider.getID()', '$curNewznabProvider.name', '$curNewznabProvider.url', '$curNewznabProvider.key', $int($curNewznabProvider.default));
 #end for
 });
 //-->
 </script>
+#end if
+
+#if $sickbeard.USE_TORRENTS
+<script type="text/javascript" charset="utf-8">
+<!--
+\$(document).ready(function(){
+#for $curAnyRssProvider in $sickbeard.anyRssProviderList:
+    \$(this).addAnyRssProvider('$curAnyRssProvider.getID()', '$curAnyRssProvider.name', '$curAnyRssProvider.url');
+#end for
+});
+//-->
+</script>
+#end if
 
 <div id="config">
 <div id="config-content">
@@ -29,7 +41,7 @@ var show_nzb_providers = #if $sickbeard.USE_NZBS then "true" else "false"#;
 <form id="configForm" action="saveProviders" method="post">
 
             <div id="config-components">
-                
+
                 <div id="core-component-group1" class="component-group clearfix">
 
                     <div class="component-group-desc">
@@ -67,10 +79,10 @@ var show_nzb_providers = #if $sickbeard.USE_NZBS then "true" else "false"#;
                 <div id="core-component-group2" class="component-group clearfix">
 
                     <div class="component-group-desc">
-                        <h3>Configure Built-In<br />Providers</h3>
+                        <h3>Configure Built-In Providers</h3>
                         <p>Check with provider's website on how to obtain an API key if needed.</p>
                     </div>
-                    
+
                     <fieldset class="component-group-list">
                         <div class="field-pair">
                             <label class="clearfix" for="editAProvider">
@@ -87,9 +99,9 @@ var show_nzb_providers = #if $sickbeard.USE_NZBS then "true" else "false"#;
                                         $provider_config_list.append($cur_provider_obj)
                                     #end for
 
-                                    #if $provider_config_list:                                        
+                                    #if $provider_config_list:
                                     <select id="editAProvider">
-                                        #for $cur_provider in $provider_config_list + [$curProvider for $curProvider in $sickbeard.newznabProviderList if $curProvider.default and $curProvider.needs_auth]:
+                                        #for $cur_provider in $provider_config_list + [$curProvider for $curProvider in $sickbeard.newznabProviderList if $curProvider.default and $curProvider.needs_auth and $sickbeard.USE_NZBS]:
                                             <option value="$cur_provider.getID()">$cur_provider.name</option>
                                         #end for
                                     </select>
@@ -207,14 +219,15 @@ var show_nzb_providers = #if $sickbeard.USE_NZBS then "true" else "false"#;
 <!-- end div for editing providers -->
 
                     <input type="submit" class="config_submitter" value="Save Changes" /><br/>
-            
+
                     </fieldset>
                 </div><!-- /component-group2 //-->
+#if $sickbeard.USE_NZBS:
 
                 <div id="core-component-group3" class="component-group clearfix">
 
                     <div class="component-group-desc">
-                        <h3>Configure Custom<br />Newznab Providers</h3>
+                        <h3>Configure Custom Newznab Providers</h3>
                         <p>Add and setup custom Newznab providers.</p>
                         <p>Some built-in Newznab providers are already available above.</p>
                     </div>
@@ -260,15 +273,63 @@ var show_nzb_providers = #if $sickbeard.USE_NZBS then "true" else "false"#;
             </div>
             <div id="newznab_update_div" style="display: none;">
                 <input type="button" class="newznab_delete" id="newznab_delete" value="Delete" />
-            </div> 
+            </div>
 </div>
 
                     </fieldset>
                 </div><!-- /component-group3 //-->
+#end if
 
-                    
-            <br/><input type="submit" class="config_submitter" value="Save Changes" /><br/>
-                
+#if $sickbeard.USE_TORRENTS:
+
+                <div id="core-component-group4" class="component-group clearfix">
+
+                    <div class="component-group-desc">
+                        <h3>Configure Custom Torrent RSS Providers</h3>
+                        <p>Add and setup custom RSS providers.</p>
+                        <p>&nbsp;</p>
+                    </div>
+
+                    <fieldset class="component-group-list">
+                        <div class="field-pair">
+                            <label class="clearfix">
+                                <span class="component-title jumbo">Select Provider:</span>
+                                <span class="component-desc">
+                                    <input type="hidden" name="anyrss_string" id="anyrss_string" />
+                                    <select id="editAAnyRssProvider">
+                                        <option value="addAnyRss">-- add new provider --</option>
+                                    </select>
+                                </span>
+                            </label>
+                        </div>
+
+<div class="anyRssProviderDiv" id="addAnyRss">
+                        <div class="field-pair">
+                            <label class="nocheck clearfix">
+                                <span class="component-title">Provider Name</span>
+                                <input class="component-desc" type="text" id="anyrss_name" size="40" />
+                            </label>
+                        </div>
+                        <div class="field-pair">
+                            <label class="nocheck clearfix">
+                                <span class="component-title">RSS URL</span>
+                                <input class="component-desc" type="text" id="anyrss_url" size="40" />
+                            </label>
+                        </div>
+            <div id="anyrss_add_div">
+                <input type="button" class="anyrss_save" id="anyrss_add" value="Add" />
+            </div>
+            <div id="anyrss_update_div" style="display: none;">
+                <input type="button" class="anyrss_delete" id="anyrss_delete" value="Delete" />
+            </div>
+</div>
+
+                    </fieldset>
+                </div><!-- /component-group4 //-->
+#end if
+
+            <br/><input type="submit" class="config_submitter" value="Save Changes" />
+
             </div><!-- /config-components //-->
 
 </form>

@@ -40,7 +40,7 @@ from sickbeard import encodingKludge as ek
 from sickbeard import search_queue
 from sickbeard import image_cache
 
-from sickbeard.providers import newznab, getProviderClass
+from sickbeard.providers import newznab, getProviderClass, anyrss
 from sickbeard.common import Quality, Overview, statusStrings
 from sickbeard.common import SNATCHED, DOWNLOADED, SKIPPED, UNAIRED, IGNORED, ARCHIVED, WANTED
 from sickbeard.exceptions import ex
@@ -1101,6 +1101,26 @@ class ConfigProviders:
             return json.dumps({'success': tempProvider.getID()})
 
     @cherrypy.expose
+    def canAddAnyRssProvider(self, name, url):
+
+        if not name:
+            return json.dumps({'error': 'Invalid name specified'})
+
+        providerDict = dict(zip([x.getID() for x in sickbeard.anyRssProviderList], sickbeard.anyRssProviderList))
+
+        tempProvider = anyrss.AnyRssProvider(name, url)
+
+        if tempProvider.getID() in providerDict:
+            return json.dumps({'error': 'Exists as '+providerDict[tempProvider.getID()].name})
+        else:
+            (succ, errMsg) = tempProvider.verifyRss()
+            logger.log(u"verifyRss got: " + errMsg)
+            if succ:
+                return json.dumps({'success': tempProvider.getID()})
+            else:
+                return json.dumps({'error': errMsg })
+
+    @cherrypy.expose
     def saveNewznabProvider(self, name, url, key=''):
 
         if not name or not url:
@@ -1125,6 +1145,25 @@ class ConfigProviders:
             sickbeard.newznabProviderList.append(newProvider)
             return newProvider.getID() + '|' + newProvider.configStr()
 
+    @cherrypy.expose
+    def saveAnyRssProvider(self, name, url):
+
+        if not name or not url:
+            return '0'
+
+        providerDict = dict(zip([x.name for x in sickbeard.anyRssProviderList], sickbeard.anyRssProviderList))
+
+        if name in providerDict:
+            providerDict[name].name = name
+            providerDict[name].url = url
+
+            return providerDict[name].getID() + '|' + providerDict[name].configStr()
+
+        else:
+
+            newProvider = anyrss.AnyRssProvider(name, url)
+            sickbeard.anyRssProviderList.append(newProvider)
+            return newProvider.getID() + '|' + newProvider.configStr()
 
 
     @cherrypy.expose
@@ -1143,10 +1182,26 @@ class ConfigProviders:
 
         return '1'
 
+    @cherrypy.expose
+    def deleteAnyRssProvider(self, id):
+
+        providerDict = dict(zip([x.getID() for x in sickbeard.anyRssProviderList], sickbeard.anyRssProviderList))
+
+        if id not in providerDict:
+            return '0'
+
+        # delete it from the list
+        sickbeard.anyRssProviderList.remove(providerDict[id])
+
+        if id in sickbeard.PROVIDER_ORDER:
+            sickbeard.PROVIDER_ORDER.remove(id)
+
+        return '1'
 
     @cherrypy.expose
     def saveProviders(self, nzbmatrix_username=None, nzbmatrix_apikey=None,
                       nzbs_r_us_uid=None, nzbs_r_us_hash=None, newznab_string=None,
+                      anyrss_string='',
                       tvtorrents_digest=None, tvtorrents_hash=None,
  					  btn_api_key=None,
                       newzbin_username=None, newzbin_password=None,
@@ -1158,35 +1213,68 @@ class ConfigProviders:
         provider_list = []
 
         newznabProviderDict = dict(zip([x.getID() for x in sickbeard.newznabProviderList], sickbeard.newznabProviderList))
+        anyRssProviderDict = dict(zip([x.getID() for x in sickbeard.anyRssProviderList], sickbeard.anyRssProviderList))
 
         finishedNames = []
 
         # add all the newznab info we got into our list
-        for curNewznabProviderStr in newznab_string.split('!!!'):
+        if newznab_string:
+            for curNewznabProviderStr in newznab_string.split('!!!'):
+    
+                if not curNewznabProviderStr:
+                    continue
+    
+                curName, curURL, curKey = curNewznabProviderStr.split('|')
+    
+                newProvider = newznab.NewznabProvider(curName, curURL, curKey)
+    
+                curID = newProvider.getID()
+    
+                # if it already exists then update it
+                if curID in newznabProviderDict:
+                    newznabProviderDict[curID].name = curName
+                    newznabProviderDict[curID].url = curURL
+                    newznabProviderDict[curID].key = curKey
+                else:
+                    sickbeard.newznabProviderList.append(newProvider)
+    
+                finishedNames.append(curID)
+    
+            # delete anything that is missing
+            for curProvider in sickbeard.newznabProviderList:
+                if curProvider.getID() not in finishedNames:
+                    sickbeard.newznabProviderList.remove(curProvider)
 
-            if not curNewznabProviderStr:
-                continue
-
-            curName, curURL, curKey = curNewznabProviderStr.split('|')
-
-            newProvider = newznab.NewznabProvider(curName, curURL, curKey)
-
-            curID = newProvider.getID()
-
-            # if it already exists then update it
-            if curID in newznabProviderDict:
-                newznabProviderDict[curID].name = curName
-                newznabProviderDict[curID].url = curURL
-                newznabProviderDict[curID].key = curKey
-            else:
-                sickbeard.newznabProviderList.append(newProvider)
-
-            finishedNames.append(curID)
-
+        finishedNames = []
+        #logger.log(u"anyrss_string =  " + anyrss_string)
+                    
+        if anyrss_string:
+            for curAnyRssProviderStr in anyrss_string.split('!!!'):
+    
+                if not curAnyRssProviderStr:
+                    continue
+    
+                curName, curURL = curAnyRssProviderStr.split('|||')
+    
+                newProvider = anyrss.AnyRssProvider(curName, curURL)
+    
+                curID = newProvider.getID()
+    
+                # if it already exists then update it
+                if curID in anyRssProviderDict:
+                    anyRssProviderDict[curID].name = curName
+                    anyRssProviderDict[curID].url = curURL
+                else:
+                    sickbeard.anyRssProviderList.append(newProvider)
+    
+                finishedNames.append(curID)
+    
         # delete anything that is missing
-        for curProvider in sickbeard.newznabProviderList:
+        #logger.log(u"sickbeard.anyRssProviderList =  " + repr(sickbeard.anyRssProviderList))
+        for curProvider in sickbeard.anyRssProviderList:
             if curProvider.getID() not in finishedNames:
-                sickbeard.newznabProviderList.remove(curProvider)
+                sickbeard.anyRssProviderList.remove(curProvider)
+
 
         # do the enable/disable
         for curProviderStr in provider_str_list:
@@ -1219,6 +1307,8 @@ class ConfigProviders:
                 sickbeard.BTN = curEnabled
             elif curProvider in newznabProviderDict:
                 newznabProviderDict[curProvider].enabled = bool(curEnabled)
+            elif curProvider in anyRssProviderDict:
+                anyRssProviderDict[curProvider].enabled = bool(curEnabled)                
             else:
                 logger.log(u"don't know what "+curProvider+" is, skipping")
 

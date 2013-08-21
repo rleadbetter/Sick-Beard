@@ -162,7 +162,7 @@ def makeSceneSeasonSearchString (show, segment, extraSearchType=None, scene=Fals
                     if isinstance(episodeNumberResult["scene_absolute_number"], int):
                         ab_number = int(episodeNumberResult["scene_absolute_number"])
                 if ab_number > 0:
-                    seasonStrings.append("%d" % ab_number)
+                    seasonStrings.append("%02d" % ab_number)
 
     else:
         numseasonsSQlResult = myDB.select("SELECT COUNT(DISTINCT season) as numseasons FROM tv_episodes WHERE showid = ? and season != 0", [show.tvdbid])

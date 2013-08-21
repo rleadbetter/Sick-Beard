@@ -30,7 +30,7 @@ from threading import Lock
 
 # apparently py2exe won't build these unless they're imported somewhere
 from sickbeard import providers, metadata
-from providers import ezrss, tvtorrents, btn, nzbmatrix, nzbsrus, newznab, womble, newzbin, nzbs_org_old, fanzub, nyaa
+from providers import ezrss, tvtorrents, btn, nzbmatrix, nzbsrus, newznab, womble, newzbin, nzbs_org_old, fanzub, nyaa, anyrss
 
 from sickbeard import searchCurrent, searchBacklog, showUpdater, versionChecker, properFinder, autoPostProcesser
 from sickbeard import helpers, db, exceptions, show_queue, search_queue, scheduler
@@ -77,6 +77,7 @@ loadingShowList = None
 
 providerList = []
 newznabProviderList = []
+anyRssProviderList = []
 metadata_provider_dict = {}
 
 NEWEST_VERSION = None
@@ -96,6 +97,8 @@ WEB_USERNAME = None
 WEB_PASSWORD = None
 WEB_HOST = None
 WEB_IPV6 = None
+
+ANON_REDIRECT = None
 
 USE_API = False
 API_KEY = None
@@ -146,6 +149,7 @@ NZB_METHOD = None
 NZB_DIR = None
 USENET_RETENTION = None
 DOWNLOAD_PROPERS = None
+PREFER_MAGNETS = None
 
 SEARCH_FREQUENCY = None
 BACKLOG_SEARCH_FREQUENCY = 21
@@ -429,7 +433,8 @@ def initialize(consoleLogging=True):
                 NEWZBIN, NEWZBIN_USERNAME, NEWZBIN_PASSWORD,FANZUB, NYAA, GIT_PATH, MOVE_ASSOCIATED_FILES, \
                 COMING_EPS_LAYOUT, COMING_EPS_SORT, COMING_EPS_DISPLAY_PAUSED, METADATA_WDTV, METADATA_TIVO, IGNORE_WORDS, \
                 ANIMESUPPORT, USE_ANIDB, ANIDB_USERNAME, ANIDB_PASSWORD, ANIDB_USE_MYLIST, ANIME_SPLIT_HOME, CREATE_MISSING_SHOW_DIRS, \
-                ADD_SHOWS_WO_DIR, SYS_ENCODING, _CONFIG_SYS_ENCODING
+                anyRssProviderList, PREFER_MAGNETS, \
+                ADD_SHOWS_WO_DIR, SYS_ENCODING, _CONFIG_SYS_ENCODING, ANON_REDIRECT
 
         if __INITIALIZED__:
             return False
@@ -450,6 +455,7 @@ def initialize(consoleLogging=True):
         CheckSection('Synology')
         CheckSection('pyTivo')
         CheckSection('NMA')
+        CheckSection('AnyRss')
 
         LOG_DIR = check_setting_str(CFG, 'General', 'log_dir', 'Logs')
         if not helpers.makeDir(LOG_DIR):
@@ -772,6 +778,9 @@ def initialize(consoleLogging=True):
 
         newznabData = check_setting_str(CFG, 'Newznab', 'newznab_data', '')
         newznabProviderList = providers.getNewznabProviderList(newznabData)
+        
+        anyRssData = check_setting_str(CFG, 'AnyRss', 'anyrss_data', '')
+        anyRssProviderList = providers.getAnyRssProviderList(anyRssData)
 
         providerList = providers.makeProviderList()
         
@@ -1152,6 +1161,9 @@ def save_config():
     
     new_config['Nyaa'] = {}
     new_config['Nyaa']['nyaa'] = int(NYAA)
+
+    new_config['AnyRss'] = {}
+    new_config['AnyRss']['anyrss_data'] = '!!!'.join([x.configStr() for x in anyRssProviderList])
 
     new_config['Womble'] = {}
     new_config['Womble']['womble'] = int(WOMBLE)
